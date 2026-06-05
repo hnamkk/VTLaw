@@ -1,0 +1,21 @@
+services:
+  db:
+    # Pin pgvector >= 0.5.0 để đảm bảo HNSW index khả dụng (idx_chunks_embedding).
+    image: pgvector/pgvector:0.8.0-pg16
+    container_name: legalai-postgres
+    environment:
+      POSTGRES_USER: legalai_user
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: legalai_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U legalai_user -d legalai_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  pgdata:

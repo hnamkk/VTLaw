@@ -1,0 +1,91 @@
+# Environment
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyright/
+.tox/
+.nox/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.vscode/
+.idea/
+
+# Uploaded documents (large binary files)
+app/backend/storage/raw/*
+app/backend/storage/processed/*
+app/backend/storage/uploads/*
+app/backend/storage/assets/*
+app/backend/storage/*.sqlite3
+!app/backend/storage/raw/.gitkeep
+!app/backend/storage/processed/.gitkeep
+!app/backend/storage/uploads/.gitkeep
+!app/backend/storage/assets/.gitkeep
+backups/
+.tmp/
+
+# Local vector database and caches
+/data/chroma/
+/app/backend/storage/embedding_cache.json
+/app/backend/storage/accent_cache.json
+/app/backend/storage/*.sqlite3-*
+
+# Local KB v2 runtime storage and corpus source binaries
+app/backend/storage/kb_v2/
+corpus/kb-v2/raw-docx/
+
+# Local audit/test artifacts
+.audit-temp/
+.pytest-kb*/
+.pytest-temporal-backfill/
+.deepeval/
+e2e-admin-cross-audit/
+e2e-admin-snapshots/
+e2e-hitl-audit-snapshots/
+e2e-snapshots/
+e2e-snapshots-live/
+app/frontend/test-results/
+app/frontend/playwright-report/
+
+# Frontend
+app/frontend/node_modules/
+app/frontend/.next/
+app/frontend/out/
+app/frontend/.vercel/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Generated evaluation reports
+eval/reports/latest_rag_eval.md
+
+# Temporary files
+*.log
+*.tmp
+*.bak
+*.swp
+*~
+
