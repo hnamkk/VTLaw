@@ -1,0 +1,215 @@
+{
+  "schema_version": 1,
+  "version": "2026-07-09-c9",
+  "intent_hints": {
+    "summary_phrases": ["tom tat", "summary"],
+    "document_lookup_phrases": ["noi dung", "thong tin", "noi ve gi", "quy dinh gi", "van ban nay"],
+    "effective_status_phrases": ["con hieu luc", "het hieu luc", "hieu luc", "ap dung chua", "co hieu luc chua"],
+    "comparison_history_phrases": ["truoc day", "truoc khi co", "truoc khi van ban moi", "luat cu", "quy dinh cu", "da het hieu luc", "het hieu luc ve", "thay doi gi", "khac gi truoc", "so voi truoc"],
+    "definition_phrases": ["la gi", "khai niem", "dinh nghia", "duoc hieu", "giai thich"],
+    "obligation_phrases": ["co phai", "bat buoc", "duoc phep", "cam", "co duoc", "phai "],
+    "penalty_phrases": ["phat bao nhieu", "muc phat", "bi phat", "xu phat", "phat tien", "tuoc", "tru diem"],
+    "procedure_phrases": ["thu tuc", "ho so", "can gi", "doi gplx", "cap lai", "xin cap", "nop o dau"],
+    "ambiguous_phrases": ["quy dinh nay", "van ban nay", "cai nay", "noi dung nay"],
+    "ambiguous_short_cues": ["quy dinh", "van ban", "dieu nay", "noi dung", "hieu luc"]
+  },
+  "follow_up": {
+    "prefixes": ["con ", "neu ", "the ", "vay ", "truong hop "],
+    "phrases": [
+      "truong hop nay",
+      "truong hop do",
+      "quy dinh nay",
+      "van ban nay",
+      "noi dung nay",
+      "cai nay",
+      "muc phat la bao nhieu",
+      "muc phat the nao",
+      "thu tuc the nao",
+      "co can gi nua",
+      "can gi nua",
+      "co can khong",
+      "phan ly thuyet",
+      "nhom 1 gom",
+      "bao nhieu"
+    ],
+    "low_signal_user_intents": ["ambiguous"],
+    "history_question_blockers": [
+      "prompt_injection",
+      "assistant_identity",
+      "assistant_capability",
+      "assistant_role",
+      "assistant_legal_value",
+      "assistant_liability",
+      "assistant_source_policy",
+      "assistant_how_to_use"
+    ],
+    "topic_hints": [
+      "xe",
+      "oto",
+      "o to",
+      "xe may",
+      "gplx",
+      "bang lai",
+      "giay phep",
+      "dang ky",
+      "mu bao hiem",
+      "vuot den do",
+      "nong do con",
+      "phu hieu",
+      "kinh doanh van tai",
+      "ben xe",
+      "sat hach",
+      "suc khoe",
+      "kiem dinh",
+      "toc do"
+    ],
+      "standalone_topic_hints": [
+        "doi gplx",
+        "cap lai",
+        "dang ky",
+        "nop o dau",
+        "thu tuc",
+        "phi bot",
+        "bot",
+        "khong doi mu bao hiem",
+        "vuot den do",
+        "nong do con",
+        "xe khach",
+        "xe tai",
+        "xe may",
+        "oto",
+        "o to"
+      ]
+  },
+  "legal_advice": {
+    "procedure_hints": ["thu tuc", "ho so", "dang ky", "cap lai", "doi gplx", "nop o dau", "xin cap"],
+    "objective_checklist_hints": ["ho so", "co quan tiep nhan", "nop o dau", "thoi han", "trinh tu", "dieu kien", "giay to"],
+      "strategy_phrases": ["toi nen lam gi", "nen lam gi", "co nen", "nen xu ly the nao", "xu ly sao", "phuong an nao", "nen chon cach nao"],
+      "high_risk_strategy_phrases": [
+      "khai the nao",
+      "co loi nhat",
+      "ne bi phat",
+      "ne phat",
+      "chua du dieu kien",
+      "nen kien khong",
+      "kien hay khong",
+      "khieu nai hay khoi kien",
+      "nen khieu nai khong",
+      "nen thuong luong the nao",
+      "lam sao tranh bi phat",
+      "lam sao giam muc phat",
+      "van duoc cap bien",
+      "ke ho",
+      "khong can phu hieu",
+      "toi uu loi ich",
+      "chien luoc",
+      "tranh chap"
+    ],
+    "dispute_phrases": ["khieu nai", "khoi kien", "tranh chap", "to cao", "khieu kien"]
+  },
+  "retrieval_expansion": {
+    "term_groups": {
+      "commercial_transport_terms": [
+        "gpkd",
+        "kinh doanh van tai",
+        "van tai hang hoa",
+        "van tai hanh khach",
+        "tuyen lien tinh",
+        "tuyen co dinh",
+        "phu hieu",
+        "bien hieu",
+        "giay phep kinh doanh"
+      ],
+      "commercial_transport_vehicles": ["xe tai", "o to", "xe khach", "xe dau keo", "container"],
+      "document_requirement_terms": ["giay to", "can gi", "can giay to", "thu tuc", "dieu kien", "cap gpkd", "cap giay phep"],
+      "safe_distance_terms": ["khoang cach an toan", "toc do"],
+      "phone_prohibition_terms": ["dien thoai", "lai xe"],
+      "traffic_light_terms": ["vuot den do", "den do"],
+      "helmet_terms": ["mu bao hiem", "khong doi mu"],
+      "license_terms": ["khong co giay phep lai xe", "khong co bang lai"],
+      "high_beam_terms": ["den pha", "den chieu xa"],
+      "alcohol_terms": ["nong do con", "uong ruou", "uong bia"],
+      "wrong_way_terms": ["di nguoc chieu", "duong mot chieu"],
+      "camera_terms": ["camera", "giam sat"],
+      "driving_time_terms": ["lai toi da", "thoi gian lai xe", "gio ngay", "gio/ngay"]
+    },
+    "rules": [
+      {
+        "name": "structural_scope",
+        "match_any": ["bao quat", "dieu chinh nhung", "pham vi ap dung", "quy dinh nhung", "van de chinh"],
+        "expansion_text": "pham vi dieu chinh van ban nay quy dinh thong tu nay quy dinh luat nay quy dinh"
+      },
+      {
+        "name": "structural_definition",
+        "match_any": ["bao gom nhung", "dieu kien nen tang", "duoc nhan biet", "giai thich", "gom nhung", "khai niem", "la gi", "y nghia gi"],
+        "expansion_text": "giai thich tu ngu nguyen tac dieu kien chung la bao gom"
+      },
+      {
+        "name": "registration_inspection_distinction",
+        "match_any": ["dang ky xe va kiem dinh xe", "dang ky xe kiem dinh xe", "dang ky va kiem dinh", "xac nhan hai van de", "phan biet dang ky xe"],
+        "expansion_text": "dang ky xe nguon goc hop phap bao dam tieu chuan chat luong an toan ky thuat va bao ve moi truong kiem dinh xe giay chung nhan kiem dinh tinh trang an toan ky thuat bao ve moi truong"
+      },
+      {
+        "name": "driving_theory_exam_content",
+        "match_any": ["phan ly thuyet", "ly thuyet kiem tra", "sat hach ly thuyet"],
+        "expansion_text": "noi dung sat hach ly thuyet phap luat ve trat tu an toan giao thong ky thuat lai xe van hoa giao thong"
+      },
+      {
+        "name": "transport_business_requirements",
+        "requires_any_of": ["commercial_transport_vehicles", "commercial_transport_terms"],
+        "requires_all_groups": ["commercial_transport_terms|document_requirement_terms"],
+        "expansion_text": "kinh doanh van tai bang xe o to giay phep kinh doanh van tai phu hieu bien hieu"
+      },
+      {
+        "name": "safe_distance",
+        "match_all_group": "safe_distance_terms",
+        "expansion_text": "khoảng cách an toàn giữa hai xe tốc độ xe chạy giữ khoảng cách an toàn khoang cach an toan giua hai xe toc do xe chay giu khoang cach an toan"
+      },
+      {
+        "name": "phone_prohibition",
+        "match_all_group": "phone_prohibition_terms",
+        "expansion_text": "dùng tay cầm và sử dụng điện thoại khi điều khiển phương tiện đang di chuyển dung tay cam va su dung dien thoai khi dieu khien phuong tien dang di chuyen"
+      },
+      {
+        "name": "traffic_light",
+        "match_any_group": "traffic_light_terms",
+        "expansion_text": "không chấp hành hiệu lệnh của đèn tín hiệu giao thông khong chap hanh hieu lenh cua den tin hieu giao thong"
+      },
+      {
+        "name": "helmet",
+        "match_any_group": "helmet_terms",
+        "expansion_text": "người điều khiển xe mô tô xe gắn máy không đội mũ bảo hiểm không cài quai nguoi dieu khien xe mo to xe gan may khong doi mu bao hiem khong cai quai"
+      },
+      {
+        "name": "license",
+        "match_any_group": "license_terms",
+        "expansion_text": "người điều khiển xe mô tô không có giấy phép lái xe nguoi dieu khien xe mo to khong co giay phep lai xe"
+      },
+      {
+        "name": "high_beam",
+        "match_any_group": "high_beam_terms",
+        "expansion_text": "sử dụng đèn chiếu xa khi gặp xe đi ngược chiều su dung den chieu xa khi gap xe di nguoc chieu"
+      },
+      {
+        "name": "alcohol",
+        "match_any_group": "alcohol_terms",
+        "expansion_text": "điều khiển xe trong máu hoặc hơi thở có nồng độ cồn dieu khien xe trong mau hoac hoi tho co nong do con"
+      },
+      {
+        "name": "wrong_way",
+        "match_any_group": "wrong_way_terms",
+        "expansion_text": "đi ngược chiều của đường một chiều đường có biển cấm đi ngược chiều di nguoc chieu cua duong mot chieu duong co bien cam di nguoc chieu"
+      },
+      {
+        "name": "camera",
+        "match_any_group": "camera_terms",
+        "expansion_text": "xe ô tô kinh doanh vận tải hành khách từ 09 chỗ kể cả người lái xe phải lắp camera xe o to kinh doanh van tai hanh khach tu 09 cho ke ca nguoi lai xe phai lap camera"
+      },
+      {
+        "name": "driving_time",
+        "match_any_group": "driving_time_terms",
+        "expansion_text": "thời gian lái xe của người lái xe ô tô không quá 10 giờ trong một ngày thoi gian lai xe cua nguoi lai xe o to khong qua 10 gio trong mot ngay"
+      }
+    ]
+  }
+}
