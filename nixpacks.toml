@@ -1,0 +1,12 @@
+providers = ["python"]
+
+[variables]
+NIXPACKS_PYTHON_VERSION = "3.13"
+
+[phases.setup]
+nixPkgs = ["python313Full", "python313Packages.pip", "gcc"]
+
+[phases.install]
+cmds = [
+  "python -m venv /app/.venv && /app/.venv/bin/python -m pip install --upgrade pip && cd app/backend && /app/.venv/bin/python -m pip install -r requirements.txt"
+]
