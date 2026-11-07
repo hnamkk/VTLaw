@@ -24,7 +24,7 @@ from src.legal_kb.review import (
     normalize_legacy_revision_review_state,
     relation_review_status,
 )
-from src.models.legal_kb import LegalKbRevision, LegalKbRetrievalUnit, LegalKbReviewEvent
+from src.models.legal_kb import LegalKbRetrievalUnit, LegalKbReviewEvent, LegalKbRevision
 
 REQUIRED_METADATA_FIELDS = (
     "title",

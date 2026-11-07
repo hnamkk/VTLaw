@@ -1,5 +1,5 @@
 from src.core.config import Settings, settings
-from src.models import LegalKbRevision, LegalKbDocument, LegalKbRetrievalUnit
+from src.models import LegalKbDocument, LegalKbRetrievalUnit, LegalKbRevision
 from src.storage.object_storage import (
     ObjectMetadata,
     ObjectStorageError,

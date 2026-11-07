@@ -9,7 +9,7 @@ export default defineConfig({
   reporter: [['line']],
   use: {
     baseURL: frontendUrl,
-    channel: 'msedge',
+    browserName: 'chromium',
     headless: true,
     ignoreHTTPSErrors: true,
     trace: 'retain-on-failure',
@@ -26,9 +26,7 @@ export default defineConfig({
     {
       name: 'mobile',
       use: {
-        browserName: 'chromium',
         ...devices['iPhone 13'],
-        channel: 'msedge',
       },
     },
   ],

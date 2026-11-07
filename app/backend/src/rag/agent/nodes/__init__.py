@@ -31,10 +31,10 @@ from sqlalchemy import select
 from src.legal_kb.evidence import assemble_evidence_bundle
 from src.legal_kb.temporal import resolve_query_date
 from src.models.legal_kb import (
-    LegalKbRelation,
-    LegalKbRevision,
     LegalKbDocument,
+    LegalKbRelation,
     LegalKbRetrievalUnit,
+    LegalKbRevision,
     LegalKbSummary,
 )
 from src.rag.agent.state import AgentState

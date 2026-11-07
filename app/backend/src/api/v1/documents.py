@@ -12,24 +12,24 @@ from sqlalchemy.orm import selectinload
 
 from src.api.v1.schemas import (
     DocumentsResponse,
+    LegalDocumentOut,
     LegalKbDocumentSummaryOut,
     LegalKbDynamicSummaryRequest,
     LegalKbHistoricalCitationOut,
     LegalKbPublicDocumentDetailOut,
-    LegalDocumentOut,
     PublicDocumentRelationOut,
 )
 from src.core.config import settings
 from src.db.session import get_session
+from src.legal_kb.review import relation_review_status
 from src.legal_kb.summaries import build_dynamic_summary, get_standard_summary
 from src.models.legal_kb import (
-    LegalKbRelation,
-    LegalKbRevision,
     LegalKbDocument,
+    LegalKbRelation,
     LegalKbRetrievalUnit,
+    LegalKbRevision,
     LegalKbSourceAsset,
 )
-from src.legal_kb.review import relation_review_status
 from src.storage.object_storage import get_object_storage, is_object_uri
 
 router = APIRouter(tags=["documents"])

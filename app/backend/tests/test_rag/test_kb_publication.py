@@ -23,11 +23,11 @@ from src.legal_kb.review import (
     review_summary,
 )
 from src.models.legal_kb import (
-    LegalKbNode,
-    LegalKbRevision,
     LegalKbDocument,
     LegalKbMetadataProposal,
+    LegalKbNode,
     LegalKbRetrievalUnit,
+    LegalKbRevision,
     LegalKbSourceAsset,
     LegalKbSummary,
 )

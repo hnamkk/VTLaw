@@ -19,9 +19,9 @@ from src.legal_kb.parser import build_canonical_nodes, parse_docx_into_artifacts
 from src.legal_kb.proposals import build_summary_proposal, seed_initial_metadata_proposals
 from src.legal_kb.retrieval_units import RISKY_NODE_TYPES_REQUIRING_ANSWERABILITY_DECISION
 from src.models.legal_kb import (
-    LegalKbRevision,
     LegalKbDocument,
     LegalKbReviewEvent,
+    LegalKbRevision,
     LegalKbSourceAsset,
 )
 from src.storage.object_storage import build_legal_kb_object_key, get_object_storage

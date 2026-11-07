@@ -56,3 +56,9 @@ Dùng virtualenv dự án từ root:
 Chạy kiểm tra frontend trong app/frontend: `npm run lint` và `npm run build`.
 
 Full evaluation dùng PostgreSQL và OpenAI API thật, có thể phát sinh chi phí và ghi báo cáo vào eval/reports/. Không dùng subset chẩn đoán để tuyên bố đạt release gate.
+
+## CI và release checks
+
+CI trên pull request chạy Ruff, toàn bộ backend test không cần dịch vụ ngoài, migration Alembic từ database PostgreSQL/pgvector rỗng cùng integration test PostgreSQL thiết yếu, và frontend lint/build. Các test phụ thuộc OpenAI thật và full RAG evaluation không chạy trên mỗi push; không đưa secret thật vào CI.
+
+Playwright hiện có các flow cần API, corpus đã seed và/hoặc tài khoản admin. Chúng chạy ở staging/release với dữ liệu kiểm thử và credentials riêng; không giả lập một lượt chạy E2E đã đạt nếu các tiền điều kiện này chưa có. Khi E2E thất bại, giữ trace/artifact để tái hiện.

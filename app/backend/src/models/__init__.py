@@ -7,22 +7,22 @@ from src.models.document_chunk import DocumentChunk
 from src.models.document_lifecycle_event import DocumentLifecycleEvent
 from src.models.document_relation import DocumentRelation
 from src.models.kb_update_queue import KbUpdateQueue
+from src.models.legal_document import LegalDocument
 from src.models.legal_kb import (
     LegalKbAmendmentOperation,
-    LegalKbNode,
-    LegalKbProvision,
-    LegalKbRelation,
-    LegalKbRevision,
     LegalKbDocument,
     LegalKbMetadataProposal,
+    LegalKbNode,
+    LegalKbProvision,
     LegalKbProvisionSource,
     LegalKbProvisionVersion,
+    LegalKbRelation,
     LegalKbRetrievalUnit,
     LegalKbReviewEvent,
+    LegalKbRevision,
     LegalKbSourceAsset,
     LegalKbSummary,
 )
-from src.models.legal_document import LegalDocument
 from src.models.notification import InAppNotification, UserNotificationRead
 from src.models.quality import (
     QualityIssue,

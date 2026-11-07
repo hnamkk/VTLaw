@@ -3,6 +3,23 @@
 **Cập nhật:** 07/11/2026
 **Trạng thái corpus:** Chưa được xác nhận đầy đủ hoặc thẩm định pháp lý.
 
+## Pilot đã khóa
+
+**Persona chính:** Cá nhân muốn hiểu một hành vi giao thông cụ thể có thể bị xử lý thế nào và ảnh hưởng ra sao đến điểm giấy phép lái xe. Ưu tiên người đi xe máy và người lái ô tô cá nhân; chỉ trả lời cho người đi bộ, xe đạp và xe đạp điện khi chủ đề có nguồn đã được kiểm tra.
+
+**Trong phạm vi pilot:**
+
+- Quy tắc giao thông cần thiết để xác định hành vi vi phạm trong tình huống người dùng mô tả.
+- Khung phạt và hình thức xử lý bổ sung gắn trực tiếp với hành vi đó, nếu nguồn được duyệt quy định rõ.
+- Điểm giấy phép lái xe: trường hợp bị trừ, mức trừ, phục hồi hoặc hệ quả liên quan, chỉ khi nguồn được duyệt nêu rõ.
+- Giải thích căn cứ theo Điều/Khoản/Điểm, thời điểm áp dụng và dữ kiện còn thiếu; hỏi lại khi thiếu loại xe, hành vi hoặc ngày xảy ra làm thay đổi kết quả.
+
+**Ngoài phạm vi pilot:** thủ tục xử lý và nộp phạt, thẩm quyền/cách làm việc với cơ quan, khiếu nại/khởi kiện, tư vấn chiến thuật pháp lý, nghiệp vụ doanh nghiệp vận tải; nhận diện biển báo/vạch/đèn hoặc tình huống qua ảnh/OCR; QCVN 41; Thông tư 51/2024/TT-BGTVT và tệp QCVN đính kèm. Câu hỏi ngoài phạm vi phải được từ chối hoặc chuyển thành câu hỏi hẹp thuộc phạm vi, không suy đoán.
+
+**Điều kiện bật từng chủ đề:** phải có văn bản nguồn chính thức điều chỉnh quy tắc/hành vi và văn bản quy định chế tài khi cần tra mức phạt; chủ đề điểm giấy phép cần thêm căn cứ trực tiếp về điểm. Phải đối chiếu sửa đổi, thay thế, hiệu lực theo điều khoản và ngày xảy ra. Nếu thiếu nguồn, nguồn chỉ là bản scan/ảnh chưa được đối chiếu, hoặc mâu thuẫn chưa giải quyết, chủ đề đó chưa answerable và không được công bố; không yêu cầu bổ sung nguồn ngoài phạm vi pilot.
+
+**Trách nhiệm:** chủ dự án là người quyết định phạm vi, nguồn nào được đưa vào corpus, trạng thái sẵn sàng của corpus và quyết định phát hành; Codex hỗ trợ kỹ thuật, không chứng nhận hiệu lực hay diễn giải pháp luật. Việc chủ dự án duyệt quy trình/corpus không được mô tả như chứng chỉ chuyên môn pháp lý. Tài liệu này khóa phạm vi sản phẩm, không xác nhận đã có đủ nguồn hoặc đã thẩm định nội dung.
+
 ## Đối tượng và phạm vi
 
 Trợ lý hỏi đáp bằng tiếng Việt về quy định giao thông đường bộ tại Việt Nam, dành cho:
@@ -20,7 +37,7 @@ Mọi câu trả lời pháp lý cần trích dẫn Điều/Khoản/Điểm phù
 
 ## Corpus
 
-Các nhóm nguồn được hướng tới gồm quy tắc và điều kiện tham gia giao thông; quyền, nghĩa vụ của người đi đường và chủ xe cá nhân; xử lý vi phạm; giấy phép lái xe; đăng ký và kiểm định xe; tốc độ và khoảng cách an toàn; cùng các quy định khác gắn trực tiếp với nhóm người dùng trên.
+Nguồn corpus cho pilot được giới hạn ở quy tắc/hành vi vi phạm, chế tài tương ứng và điểm giấy phép lái xe theo điều kiện nêu trên. Đăng ký, kiểm định, tốc độ/khoảng cách, quyền/nghĩa vụ khác chỉ được đưa vào khi cần để trả lời một câu hỏi trong pilot và có quyết định mở chủ đề riêng; không tự coi là đã nằm trong pilot.
 
 Tài liệu bàn giao ngày 07/11/2026 ghi nhận một snapshot gồm 21 tệp DOCX. Đây chỉ là số liệu kiểm kê tại thời điểm đó, không phải manifest hiện hành hay bằng chứng rằng từng tệp là bản chính xác, đủ phụ lục, còn hiệu lực hoặc bao phủ đầy đủ câu hỏi. Cần kiểm kê lại thư mục corpus trước mỗi đợt nhập liệu và đối chiếu từng nguồn với cơ quan ban hành/cơ sở dữ liệu pháp luật chính thức.
 

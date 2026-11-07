@@ -15,11 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
 from src.models.legal_kb import (
+    LegalKbDocument,
     LegalKbNode,
     LegalKbRelation,
-    LegalKbRevision,
-    LegalKbDocument,
     LegalKbRetrievalUnit,
+    LegalKbRevision,
     LegalKbSourceAsset,
 )
 from src.schemas.rag import RetrievedChunk

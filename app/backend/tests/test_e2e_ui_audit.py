@@ -1,11 +1,15 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.e2e_ui_audit import detect_network_issues, detect_overlay_issues, detect_text_issues
+from scripts.e2e_ui_audit import (  # noqa: E402
+    detect_network_issues,
+    detect_overlay_issues,
+    detect_text_issues,
+)
 
 
 def test_detect_text_issues_flags_forbidden_and_mojibake():

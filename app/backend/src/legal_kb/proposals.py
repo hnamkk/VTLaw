@@ -7,10 +7,10 @@ from uuid import uuid4
 
 from src.legal_kb.metadata import normalize_document_role, normalize_document_type
 from src.models.legal_kb import (
-    LegalKbNode,
-    LegalKbRevision,
     LegalKbDocument,
     LegalKbMetadataProposal,
+    LegalKbNode,
+    LegalKbRevision,
     LegalKbSummary,
 )
 

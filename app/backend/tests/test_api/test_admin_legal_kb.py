@@ -13,11 +13,11 @@ from src.auth.dependencies import require_admin
 from src.db.session import get_session
 from src.main import app
 from src.models.legal_kb import (
-    LegalKbRevision,
     LegalKbDocument,
     LegalKbMetadataProposal,
     LegalKbRetrievalUnit,
     LegalKbReviewEvent,
+    LegalKbRevision,
     LegalKbSourceAsset,
     LegalKbSummary,
 )

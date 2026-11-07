@@ -15,11 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.api.v1.schemas import (
-    LegalKbNodeOut,
     LegalKbDocumentOut,
-    LegalKbRelationOut,
     LegalKbMetadataProposalCreateRequest,
     LegalKbMetadataProposalOut,
+    LegalKbNodeOut,
     LegalKbNodeResetReviewRequest,
     LegalKbNodeReviewRequest,
     LegalKbProposalReviewRequest,
@@ -28,6 +27,7 @@ from src.api.v1.schemas import (
     LegalKbPublishedDocumentStatusRequest,
     LegalKbPublishedDocumentUpdateRequest,
     LegalKbRelationCreateRequest,
+    LegalKbRelationOut,
     LegalKbRelationReviewRequest,
     LegalKbRelationTargetItemOut,
     LegalKbRelationTargetListResponse,
@@ -74,11 +74,11 @@ from src.legal_kb.review import (
     update_relation_proposal,
 )
 from src.models.legal_kb import (
-    LegalKbRelation,
-    LegalKbRevision,
     LegalKbDocument,
     LegalKbMetadataProposal,
+    LegalKbRelation,
     LegalKbReviewEvent,
+    LegalKbRevision,
     LegalKbSourceAsset,
     LegalKbSummary,
 )

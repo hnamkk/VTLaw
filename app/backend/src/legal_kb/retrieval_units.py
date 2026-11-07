@@ -8,10 +8,10 @@ from uuid import uuid4
 
 from src.core.config import settings
 from src.models.legal_kb import (
-    LegalKbNode,
-    LegalKbRevision,
     LegalKbDocument,
+    LegalKbNode,
     LegalKbRetrievalUnit,
+    LegalKbRevision,
 )
 from src.rag.embedding import embed_texts
 

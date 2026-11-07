@@ -10,10 +10,10 @@ from sqlalchemy.orm import selectinload
 
 from src.models.legal_kb import (
     LegalKbAmendmentOperation,
-    LegalKbProvision,
-    LegalKbRevision,
     LegalKbDocument,
+    LegalKbProvision,
     LegalKbProvisionVersion,
+    LegalKbRevision,
 )
 
 

@@ -11,12 +11,12 @@ from sqlalchemy.orm import selectinload
 
 from src.legal_kb.metadata import normalize_document_role, normalize_document_type
 from src.models.legal_kb import (
-    LegalKbNode,
-    LegalKbRelation,
-    LegalKbRevision,
     LegalKbDocument,
     LegalKbMetadataProposal,
+    LegalKbNode,
+    LegalKbRelation,
     LegalKbReviewEvent,
+    LegalKbRevision,
     LegalKbSourceAsset,
     LegalKbSummary,
 )
