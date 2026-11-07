@@ -4,7 +4,7 @@ Date: 2026-07-03
 
 ## Summary
 
-Batch 01 contains 5 checklist rows and 5 DOCX files. All `local_file` paths exist under `corpus/kb-v2/raw-docx/batch-01`.
+Batch 01 contains 5 checklist rows and 5 DOCX files. All `local_file` paths exist under `corpus/legal-kb/raw-docx/batch-01`.
 All DOCX files were checked as valid Word packages containing `word/document.xml`.
 
 ## Files
