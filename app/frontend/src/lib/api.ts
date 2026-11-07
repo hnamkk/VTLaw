@@ -92,7 +92,7 @@ export interface AuthSession {
   user: UserAccount;
 }
 
-const ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX = '/api/v1/admin/kb-v2';
+const ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX = '/api/v1/admin/legal-kb';
 
 export class DocumentRepositoryDuplicateSourceError extends Error {
   code = 'KB_DUPLICATE_SOURCE';
@@ -111,7 +111,7 @@ export class DocumentRepositoryDuplicateSourceError extends Error {
   }
 }
 
-export const KbV2DuplicateSourceError = DocumentRepositoryDuplicateSourceError;
+export const LegalKbDuplicateSourceError = DocumentRepositoryDuplicateSourceError;
 
 export interface ChatMessage extends ChatResponseMetadata {
   role: 'user' | 'assistant';
@@ -378,7 +378,7 @@ export interface DocumentsResponse {
   page_size: number;
 }
 
-export interface KbV2HistoricalCitation {
+export interface LegalKbHistoricalCitation {
   retrieval_unit_id: string;
   document_id: string;
   revision_id: string;
@@ -393,7 +393,7 @@ export interface KbV2HistoricalCitation {
   historical: boolean;
 }
 
-export interface KbV2DocumentOut {
+export interface LegalKbDocumentOut {
   document_id: string;
   title: string | null;
   document_number: string | null;
@@ -406,7 +406,7 @@ export interface KbV2DocumentOut {
   metadata_json: Record<string, unknown>;
 }
 
-export interface KbV2RevisionOut {
+export interface LegalKbRevisionOut {
   revision_id: string;
   document_id: string;
   revision_number: number;
@@ -421,7 +421,7 @@ export interface KbV2RevisionOut {
   uploaded_at: string;
 }
 
-export interface KbV2SourceAssetOut {
+export interface LegalKbSourceAssetOut {
   asset_id: string;
   document_id: string;
   revision_id: string | null;
@@ -436,7 +436,7 @@ export interface KbV2SourceAssetOut {
   source_note: string | null;
 }
 
-export interface KbV2CanonicalNodeOut {
+export interface LegalKbNodeOut {
   node_id: string;
   revision_id: string;
   parent_id: string | null;
@@ -449,7 +449,7 @@ export interface KbV2CanonicalNodeOut {
   structured_content: Record<string, unknown>;
 }
 
-export interface KbV2MetadataProposalOut {
+export interface LegalKbMetadataProposalOut {
   proposal_id: string;
   document_id: string;
   revision_id: string;
@@ -465,7 +465,7 @@ export interface KbV2MetadataProposalOut {
   created_at: string | null;
 }
 
-export interface KbV2DocumentRelationOut {
+export interface LegalKbRelationOut {
   relation_id: string;
   source_document_id: string;
   target_document_id: string;
@@ -477,7 +477,7 @@ export interface KbV2DocumentRelationOut {
   created_at: string | null;
 }
 
-export interface KbV2StandardSummaryOut {
+export interface LegalKbSummaryOut {
   summary_id: string;
   document_id: string;
   revision_id: string;
@@ -487,7 +487,7 @@ export interface KbV2StandardSummaryOut {
   approved_at: string | null;
 }
 
-export interface KbV2RetrievalUnitOut {
+export interface LegalKbRetrievalUnitOut {
   retrieval_unit_id: string;
   canonical_node_id: string;
   document_id: string;
@@ -499,7 +499,7 @@ export interface KbV2RetrievalUnitOut {
   index_version: string | null;
 }
 
-export interface KbV2ReviewEventOut {
+export interface LegalKbReviewEventOut {
   review_event_id: string;
   document_id: string;
   revision_id: string | null;
@@ -511,37 +511,37 @@ export interface KbV2ReviewEventOut {
   created_at: string | null;
 }
 
-export interface KbV2RevisionDetailResponse {
-  document: KbV2DocumentOut;
-  revision: KbV2RevisionOut;
-  source_asset: KbV2SourceAssetOut | null;
-  canonical_nodes: KbV2CanonicalNodeOut[];
-  metadata_proposals: KbV2MetadataProposalOut[];
-  relations: KbV2DocumentRelationOut[];
-  summary: KbV2StandardSummaryOut | null;
-  retrieval_units: KbV2RetrievalUnitOut[];
-  review_events: KbV2ReviewEventOut[];
+export interface LegalKbRevisionDetailResponse {
+  document: LegalKbDocumentOut;
+  revision: LegalKbRevisionOut;
+  source_asset: LegalKbSourceAssetOut | null;
+  canonical_nodes: LegalKbNodeOut[];
+  metadata_proposals: LegalKbMetadataProposalOut[];
+  relations: LegalKbRelationOut[];
+  summary: LegalKbSummaryOut | null;
+  retrieval_units: LegalKbRetrievalUnitOut[];
+  review_events: LegalKbReviewEventOut[];
   publish_blockers: string[];
-  pending_metadata?: KbV2MetadataProposalOut[];
-  pending_relations?: KbV2DocumentRelationOut[];
-  pending_risky_nodes?: KbV2CanonicalNodeOut[];
-  resolved_risky_nodes?: KbV2CanonicalNodeOut[];
+  pending_metadata?: LegalKbMetadataProposalOut[];
+  pending_relations?: LegalKbRelationOut[];
+  pending_risky_nodes?: LegalKbNodeOut[];
+  resolved_risky_nodes?: LegalKbNodeOut[];
   resolved_risky_count?: number;
   risky_reference_only_count?: number;
   risky_answerable_count?: number;
   is_ready_to_publish?: boolean;
 }
 
-export interface KbV2UploadResponse {
-  document: KbV2DocumentOut;
-  revision: KbV2RevisionOut;
-  source_asset: KbV2SourceAssetOut;
+export interface LegalKbUploadResponse {
+  document: LegalKbDocumentOut;
+  revision: LegalKbRevisionOut;
+  source_asset: LegalKbSourceAssetOut;
   parser_confidence: number;
   parser_warnings: string[];
-  canonical_nodes: KbV2CanonicalNodeOut[];
+  canonical_nodes: LegalKbNodeOut[];
 }
 
-export interface KbV2RevisionListItem {
+export interface LegalKbRevisionListItem {
   revision_id: string;
   document_id: string;
   title: string | null;
@@ -566,14 +566,14 @@ export interface KbV2RevisionListItem {
   updated_at: string | null;
 }
 
-export interface KbV2RevisionListResponse {
-  items: KbV2RevisionListItem[];
+export interface LegalKbRevisionListResponse {
+  items: LegalKbRevisionListItem[];
   total: number;
   page: number;
   page_size: number;
 }
 
-export interface KbV2PublishedDocumentListItem {
+export interface LegalKbPublishedDocumentListItem {
   document_id: string;
   revision_id: string;
   title: string | null;
@@ -590,27 +590,27 @@ export interface KbV2PublishedDocumentListItem {
   relation_count: number;
 }
 
-export interface KbV2PublishedDocumentListResponse {
-  items: KbV2PublishedDocumentListItem[];
+export interface LegalKbPublishedDocumentListResponse {
+  items: LegalKbPublishedDocumentListItem[];
   total: number;
   page: number;
   page_size: number;
 }
 
-export interface KbV2RelationTargetItem {
+export interface LegalKbRelationTargetItem {
   document_id: string;
   title: string | null;
   document_number: string | null;
 }
 
-export interface KbV2RelationTargetListResponse {
-  items: KbV2RelationTargetItem[];
+export interface LegalKbRelationTargetListResponse {
+  items: LegalKbRelationTargetItem[];
   total: number;
 }
 
-export type PublishedDocumentListItem = KbV2PublishedDocumentListItem;
-export type PublishedDocumentListResponse = KbV2PublishedDocumentListResponse;
-export type PublishedDocumentDetailResponse = KbV2RevisionDetailResponse;
+export type PublishedDocumentListItem = LegalKbPublishedDocumentListItem;
+export type PublishedDocumentListResponse = LegalKbPublishedDocumentListResponse;
+export type PublishedDocumentDetailResponse = LegalKbRevisionDetailResponse;
 
 export interface AdminDocumentItem extends DocumentItem {
   review_status: string;
@@ -1270,7 +1270,7 @@ export async function fetchDocuments(
   return response.json();
 }
 
-export async function fetchKbV2HistoricalCitation(retrievalUnitId: string): Promise<KbV2HistoricalCitation> {
+export async function fetchLegalKbHistoricalCitation(retrievalUnitId: string): Promise<LegalKbHistoricalCitation> {
   const response = await fetch(`/api/v1/documents/citations/${retrievalUnitId}`);
   if (!response.ok) {
     throw new Error(await parseApiError(response, `Không thể tải trích dẫn lịch sử: ${response.status}`));
@@ -1328,35 +1328,35 @@ export async function fetchAdminDocumentDetail(docId: string): Promise<AdminDocu
   return response.json();
 }
 
-export async function fetchKbV2RevisionList(params: {
+export async function fetchLegalKbRevisionList(params: {
   q?: string;
   publication_status?: string;
   page?: number;
   page_size?: number;
-} = {}): Promise<KbV2RevisionListResponse> {
+} = {}): Promise<LegalKbRevisionListResponse> {
   const searchParams = new URLSearchParams();
   appendSearchParams(searchParams, params);
-  const response = await authFetch(`/api/v1/admin/kb-v2/revisions?${searchParams.toString()}`);
+  const response = await authFetch(`/api/v1/admin/legal-kb/revisions?${searchParams.toString()}`);
   if (!response.ok) {
     throw new Error(await parseApiError(response, `Không thể tải danh sách hồ sơ xử lý: ${response.status}`));
   }
   return response.json();
 }
 
-export async function fetchKbV2RevisionDetail(revisionId: string): Promise<KbV2RevisionDetailResponse> {
-  const response = await authFetch(`/api/v1/admin/kb-v2/revisions/${revisionId}`);
+export async function fetchLegalKbRevisionDetail(revisionId: string): Promise<LegalKbRevisionDetailResponse> {
+  const response = await authFetch(`/api/v1/admin/legal-kb/revisions/${revisionId}`);
   if (!response.ok) {
     throw new Error(await parseApiError(response, `Không thể tải chi tiết hồ sơ xử lý: ${response.status}`));
   }
   return response.json();
 }
 
-export async function fetchKbV2PublishedDocuments(params: {
+export async function fetchLegalKbPublishedDocuments(params: {
   q?: string;
   status?: string;
   page?: number;
   page_size?: number;
-} = {}): Promise<KbV2PublishedDocumentListResponse> {
+} = {}): Promise<LegalKbPublishedDocumentListResponse> {
   const searchParams = new URLSearchParams();
   appendSearchParams(searchParams, params);
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/documents?${searchParams.toString()}`);
@@ -1366,7 +1366,7 @@ export async function fetchKbV2PublishedDocuments(params: {
   return response.json();
 }
 
-export async function fetchKbV2PublishedDocumentDetail(documentId: string): Promise<KbV2RevisionDetailResponse> {
+export async function fetchLegalKbPublishedDocumentDetail(documentId: string): Promise<LegalKbRevisionDetailResponse> {
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/documents/${documentId}`);
   if (!response.ok) {
     throw new Error(await parseApiError(response, `Không thể tải chi tiết văn bản trong kho: ${response.status}`));
@@ -1374,7 +1374,7 @@ export async function fetchKbV2PublishedDocumentDetail(documentId: string): Prom
   return response.json();
 }
 
-export async function updateKbV2PublishedDocument(
+export async function updateLegalKbPublishedDocument(
   documentId: string,
   payload: {
     title?: string | null;
@@ -1390,7 +1390,7 @@ export async function updateKbV2PublishedDocument(
     source_file_name?: string | null;
     document_role?: string | null;
   },
-): Promise<KbV2RevisionDetailResponse> {
+): Promise<LegalKbRevisionDetailResponse> {
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/documents/${documentId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -1402,14 +1402,14 @@ export async function updateKbV2PublishedDocument(
   return response.json();
 }
 
-export async function fetchKbV2RelationTargets(params: {
+export async function fetchLegalKbRelationTargets(params: {
   q?: string;
   exclude_document_id?: string;
   limit?: number;
-} = {}): Promise<KbV2RelationTargetListResponse> {
+} = {}): Promise<LegalKbRelationTargetListResponse> {
   const searchParams = new URLSearchParams();
   appendSearchParams(searchParams, params);
-  const response = await authFetch(`/api/v1/admin/kb-v2/relation-targets?${searchParams.toString()}`);
+  const response = await authFetch(`/api/v1/admin/legal-kb/relation-targets?${searchParams.toString()}`);
   if (!response.ok) {
     throw new Error(await parseApiError(response, `Không thể tìm văn bản liên quan: ${response.status}`));
   }
@@ -1456,7 +1456,7 @@ function localizeApiBlocker(value: string): string {
   return normalized;
 }
 
-export async function updateKbV2RevisionSource(
+export async function updateLegalKbRevisionSource(
   revisionId: string,
   payload: {
     source_url?: string | null;
@@ -1464,7 +1464,7 @@ export async function updateKbV2RevisionSource(
     source_note?: string | null;
     source_file_name?: string | null;
   },
-): Promise<KbV2RevisionDetailResponse> {
+): Promise<LegalKbRevisionDetailResponse> {
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/revisions/${revisionId}/source`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -1476,14 +1476,14 @@ export async function updateKbV2RevisionSource(
   return response.json();
 }
 
-export async function updateKbV2PublishedDocumentStatus(
+export async function updateLegalKbPublishedDocumentStatus(
   documentId: string,
   payload: {
     status: 'active' | 'suspended' | 'expired' | 'replaced' | 'annulled';
     note?: string;
     replacement_document_id?: string;
   },
-): Promise<KbV2RevisionDetailResponse> {
+): Promise<LegalKbRevisionDetailResponse> {
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/documents/${documentId}/status`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1495,7 +1495,7 @@ export async function updateKbV2PublishedDocumentStatus(
   return response.json();
 }
 
-export async function uploadKbV2Revision(payload: {
+export async function uploadLegalKbRevision(payload: {
   file: File;
   title: string;
   source_url: string;
@@ -1508,7 +1508,7 @@ export async function uploadKbV2Revision(payload: {
   issued_date?: string;
   effective_date?: string;
   expiry_date?: string;
-}): Promise<KbV2UploadResponse> {
+}): Promise<LegalKbUploadResponse> {
   const formData = new FormData();
   formData.append('file', payload.file);
   formData.append('title', payload.title);
@@ -1550,7 +1550,7 @@ export async function uploadKbV2Revision(payload: {
   return response.json();
 }
 
-export async function uploadKbV2ReplacementRevision(documentId: string, payload: {
+export async function uploadLegalKbReplacementRevision(documentId: string, payload: {
   file: File;
   title: string;
   source_url: string;
@@ -1563,7 +1563,7 @@ export async function uploadKbV2ReplacementRevision(documentId: string, payload:
   issued_date?: string;
   effective_date?: string;
   expiry_date?: string;
-}): Promise<KbV2UploadResponse> {
+}): Promise<LegalKbUploadResponse> {
   const formData = new FormData();
   formData.append('file', payload.file);
   formData.append('title', payload.title);
@@ -1605,13 +1605,13 @@ export async function uploadKbV2ReplacementRevision(documentId: string, payload:
   return response.json();
 }
 
-export async function reviewKbV2Node(
+export async function reviewLegalKbNode(
   nodeId: string,
   decision: 'approved' | 'rejected',
   note?: string,
   answerable?: boolean,
 ) {
-  const response = await authFetch(`/api/v1/admin/kb-v2/nodes/${nodeId}/review`, {
+  const response = await authFetch(`/api/v1/admin/legal-kb/nodes/${nodeId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ decision, note, answerable }),
@@ -1622,8 +1622,8 @@ export async function reviewKbV2Node(
   return response.json();
 }
 
-export async function resetKbV2NodeReview(nodeId: string, note?: string) {
-  const response = await authFetch(`/api/v1/admin/kb-v2/nodes/${nodeId}/reset-review`, {
+export async function resetLegalKbNodeReview(nodeId: string, note?: string) {
+  const response = await authFetch(`/api/v1/admin/legal-kb/nodes/${nodeId}/reset-review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ note }),
@@ -1634,15 +1634,15 @@ export async function resetKbV2NodeReview(nodeId: string, note?: string) {
   return response.json();
 }
 
-export async function bulkReviewKbV2RiskyNodes(
+export async function bulkReviewLegalKbRiskyNodes(
   revisionId: string,
   payload: {
     node_type: 'table' | 'appendix' | 'form' | 'image_caption';
     mode: 'answerable' | 'review_only' | 'reset' | 'rejected';
     note?: string;
   },
-): Promise<KbV2RevisionDetailResponse> {
-  const response = await authFetch(`/api/v1/admin/kb-v2/revisions/${revisionId}/risky-nodes/bulk-review`, {
+): Promise<LegalKbRevisionDetailResponse> {
+  const response = await authFetch(`/api/v1/admin/legal-kb/revisions/${revisionId}/risky-nodes/bulk-review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -1653,13 +1653,13 @@ export async function bulkReviewKbV2RiskyNodes(
   return response.json();
 }
 
-export async function reviewKbV2MetadataProposal(
+export async function reviewLegalKbMetadataProposal(
   proposalId: string,
   decision: 'approved' | 'rejected',
   note?: string,
   proposed_value?: string,
 ) {
-  const response = await authFetch(`/api/v1/admin/kb-v2/metadata-proposals/${proposalId}/review`, {
+  const response = await authFetch(`/api/v1/admin/legal-kb/metadata-proposals/${proposalId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ decision, note, proposed_value }),
@@ -1670,7 +1670,7 @@ export async function reviewKbV2MetadataProposal(
   return response.json();
 }
 
-export async function reviewKbV2Relation(relationId: string, decision: 'approved' | 'rejected', note?: string) {
+export async function reviewLegalKbRelation(relationId: string, decision: 'approved' | 'rejected', note?: string) {
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/relations/${relationId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1682,7 +1682,7 @@ export async function reviewKbV2Relation(relationId: string, decision: 'approved
   return response.json();
 }
 
-export async function createKbV2RelationProposal(
+export async function createLegalKbRelationProposal(
   revisionId: string,
   payload: {
     target_document_id: string;
@@ -1691,7 +1691,7 @@ export async function createKbV2RelationProposal(
     target_locator?: string;
     note?: string;
   },
-): Promise<KbV2DocumentRelationOut> {
+): Promise<LegalKbRelationOut> {
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/revisions/${revisionId}/relations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1703,7 +1703,7 @@ export async function createKbV2RelationProposal(
   return response.json();
 }
 
-export async function updateKbV2Relation(
+export async function updateLegalKbRelation(
   relationId: string,
   payload: {
     target_document_id?: string;
@@ -1712,7 +1712,7 @@ export async function updateKbV2Relation(
     target_locator?: string;
     note?: string;
   },
-): Promise<KbV2DocumentRelationOut> {
+): Promise<LegalKbRelationOut> {
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/relations/${relationId}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -1724,11 +1724,11 @@ export async function updateKbV2Relation(
   return response.json();
 }
 
-export async function reviewKbV2Summary(
+export async function reviewLegalKbSummary(
   summaryId: string,
   payload: { decision: 'approved' | 'rejected'; content?: string },
 ) {
-  const response = await authFetch(`/api/v1/admin/kb-v2/summaries/${summaryId}/review`, {
+  const response = await authFetch(`/api/v1/admin/legal-kb/summaries/${summaryId}/review`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -1739,16 +1739,16 @@ export async function reviewKbV2Summary(
   return response.json();
 }
 
-export async function publishKbV2Revision(revisionId: string): Promise<KbV2RevisionDetailResponse> {
-  const response = await authFetch(`/api/v1/admin/kb-v2/revisions/${revisionId}/publish`, { method: 'POST' });
+export async function publishLegalKbRevision(revisionId: string): Promise<LegalKbRevisionDetailResponse> {
+  const response = await authFetch(`/api/v1/admin/legal-kb/revisions/${revisionId}/publish`, { method: 'POST' });
   if (!response.ok) {
     throw new Error(await parseApiError(response, `Không thể công bố hồ sơ xử lý: ${response.status}`));
   }
   return response.json();
 }
 
-export async function suspendKbV2Revision(revisionId: string, reason: string): Promise<KbV2RevisionDetailResponse> {
-  const response = await authFetch(`/api/v1/admin/kb-v2/revisions/${revisionId}/suspend`, {
+export async function suspendLegalKbRevision(revisionId: string, reason: string): Promise<LegalKbRevisionDetailResponse> {
+  const response = await authFetch(`/api/v1/admin/legal-kb/revisions/${revisionId}/suspend`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason }),
@@ -1759,7 +1759,7 @@ export async function suspendKbV2Revision(revisionId: string, reason: string): P
   return response.json();
 }
 
-export async function unsuspendKbV2Revision(revisionId: string): Promise<KbV2RevisionDetailResponse> {
+export async function unsuspendLegalKbRevision(revisionId: string): Promise<LegalKbRevisionDetailResponse> {
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/revisions/${revisionId}/unsuspend`, { method: 'POST' });
   if (!response.ok) {
     throw new Error(await parseApiError(response, `Không thể khôi phục hồ sơ xử lý: ${response.status}`));
@@ -1767,7 +1767,7 @@ export async function unsuspendKbV2Revision(revisionId: string): Promise<KbV2Rev
   return response.json();
 }
 
-export async function deleteKbV2Relation(relationId: string): Promise<void> {
+export async function deleteLegalKbRelation(relationId: string): Promise<void> {
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/relations/${relationId}`, {
     method: 'DELETE',
   });
@@ -1776,7 +1776,7 @@ export async function deleteKbV2Relation(relationId: string): Promise<void> {
   }
 }
 
-export async function createKbV2MetadataProposal(
+export async function createLegalKbMetadataProposal(
   revisionId: string,
   payload: {
     field_name:
@@ -1791,7 +1791,7 @@ export async function createKbV2MetadataProposal(
     proposed_value: string;
     note?: string;
   },
-): Promise<KbV2MetadataProposalOut> {
+): Promise<LegalKbMetadataProposalOut> {
   const response = await authFetch(`${ADMIN_DOCUMENT_REPOSITORY_ROUTE_PREFIX}/revisions/${revisionId}/metadata-proposals`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1809,25 +1809,25 @@ export async function fetchPublishedDocuments(params: {
   page?: number;
   page_size?: number;
 } = {}): Promise<PublishedDocumentListResponse> {
-  return fetchKbV2PublishedDocuments(params);
+  return fetchLegalKbPublishedDocuments(params);
 }
 
 export async function fetchPublishedDocumentDetail(documentId: string): Promise<PublishedDocumentDetailResponse> {
-  return fetchKbV2PublishedDocumentDetail(documentId);
+  return fetchLegalKbPublishedDocumentDetail(documentId);
 }
 
 export async function updatePublishedDocument(
   documentId: string,
-  payload: Parameters<typeof updateKbV2PublishedDocument>[1],
+  payload: Parameters<typeof updateLegalKbPublishedDocument>[1],
 ): Promise<PublishedDocumentDetailResponse> {
-  return updateKbV2PublishedDocument(documentId, payload);
+  return updateLegalKbPublishedDocument(documentId, payload);
 }
 
 export async function updatePublishedDocumentStatus(
   documentId: string,
-  payload: Parameters<typeof updateKbV2PublishedDocumentStatus>[1],
+  payload: Parameters<typeof updateLegalKbPublishedDocumentStatus>[1],
 ): Promise<PublishedDocumentDetailResponse> {
-  return updateKbV2PublishedDocumentStatus(documentId, payload);
+  return updateLegalKbPublishedDocumentStatus(documentId, payload);
 }
 
 export async function reviewDocumentRelation(
@@ -1835,25 +1835,25 @@ export async function reviewDocumentRelation(
   decision: 'approved' | 'rejected',
   note?: string,
 ) {
-  return reviewKbV2Relation(relationId, decision, note);
+  return reviewLegalKbRelation(relationId, decision, note);
 }
 
 export async function createDocumentRelationProposal(
   revisionId: string,
-  payload: Parameters<typeof createKbV2RelationProposal>[1],
+  payload: Parameters<typeof createLegalKbRelationProposal>[1],
 ) {
-  return createKbV2RelationProposal(revisionId, payload);
+  return createLegalKbRelationProposal(revisionId, payload);
 }
 
 export async function updateDocumentRelation(
   relationId: string,
-  payload: Parameters<typeof updateKbV2Relation>[1],
+  payload: Parameters<typeof updateLegalKbRelation>[1],
 ) {
-  return updateKbV2Relation(relationId, payload);
+  return updateLegalKbRelation(relationId, payload);
 }
 
 export async function deleteDocumentRelation(relationId: string) {
-  return deleteKbV2Relation(relationId);
+  return deleteLegalKbRelation(relationId);
 }
 
 export async function fetchQualityOverview(periodDays = 7): Promise<QualityOverview> {

@@ -12,33 +12,33 @@ import {
 } from '@phosphor-icons/react';
 
 import {
-    createKbV2MetadataProposal,
-    createKbV2RelationProposal,
-    deleteKbV2Relation,
+    createLegalKbMetadataProposal,
+    createLegalKbRelationProposal,
+    deleteLegalKbRelation,
     downloadAdminSource,
-    fetchKbV2RevisionDetail,
-    fetchKbV2RevisionList,
-    fetchKbV2RelationTargets,
-    KbV2DuplicateSourceError,
-    publishKbV2Revision,
-    resetKbV2NodeReview,
-    reviewKbV2MetadataProposal,
-    reviewKbV2Node,
-    reviewKbV2Relation,
-    reviewKbV2Summary,
-    type KbV2CanonicalNodeOut,
-    type KbV2DocumentRelationOut,
-    type KbV2MetadataProposalOut,
-    type KbV2RevisionDetailResponse,
-    type KbV2RevisionListItem,
-    type KbV2RevisionListResponse,
-    type KbV2RelationTargetItem,
-    updateKbV2Relation,
-    updateKbV2PublishedDocument,
-    updateKbV2RevisionSource,
-    uploadKbV2Revision,
+    fetchLegalKbRevisionDetail,
+    fetchLegalKbRevisionList,
+    fetchLegalKbRelationTargets,
+    LegalKbDuplicateSourceError,
+    publishLegalKbRevision,
+    resetLegalKbNodeReview,
+    reviewLegalKbMetadataProposal,
+    reviewLegalKbNode,
+    reviewLegalKbRelation,
+    reviewLegalKbSummary,
+    type LegalKbNodeOut,
+    type LegalKbRelationOut,
+    type LegalKbMetadataProposalOut,
+    type LegalKbRevisionDetailResponse,
+    type LegalKbRevisionListItem,
+    type LegalKbRevisionListResponse,
+    type LegalKbRelationTargetItem,
+    updateLegalKbRelation,
+    updateLegalKbPublishedDocument,
+    updateLegalKbRevisionSource,
+    uploadLegalKbRevision,
 } from '../../lib/api';
-import { DOCUMENT_CORPUS_PRESETS } from '../../lib/kbV2CorpusPresets';
+import { DOCUMENT_CORPUS_PRESETS } from '../../lib/kbCorpusPresets';
 
 type UploadDraft = {
     file: File | null;
@@ -107,9 +107,9 @@ type WorkspaceConfirmation =
     | { kind: 'document-save' }
     | { kind: 'publish' }
     | { kind: 'relation-update'; relationId: string }
-    | { kind: 'relation-reset'; relation: KbV2DocumentRelationOut }
-    | { kind: 'relation-delete'; relation: KbV2DocumentRelationOut }
-    | { kind: 'content-reset'; item: KbV2CanonicalNodeOut };
+    | { kind: 'relation-reset'; relation: LegalKbRelationOut }
+    | { kind: 'relation-delete'; relation: LegalKbRelationOut }
+    | { kind: 'content-reset'; item: LegalKbNodeOut };
 
 const PAGE_SIZE = 12;
 const REVIEW_HISTORY_PAGE_SIZE = 5;
@@ -308,13 +308,13 @@ function relationHelper(value: RelationType | string | null | undefined) {
     return RELATION_OPTIONS.find((option) => option.value === value)?.helper ?? '';
 }
 
-function relationCounterpartId(relation: KbV2DocumentRelationOut, documentId: string) {
+function relationCounterpartId(relation: LegalKbRelationOut, documentId: string) {
     return relation.source_document_id === documentId
         ? relation.target_document_id
         : relation.source_document_id;
 }
 
-function relationDirectionLabel(relation: KbV2DocumentRelationOut, documentId: string) {
+function relationDirectionLabel(relation: LegalKbRelationOut, documentId: string) {
     return relation.source_document_id === documentId ? 'Quan hệ đi' : 'Quan hệ đến';
 }
 
@@ -349,7 +349,7 @@ function emptyRelationDraft(): RelationDraft {
     };
 }
 
-function buildDocumentFormDraft(detail: KbV2RevisionDetailResponse): DocumentFormDraft {
+function buildDocumentFormDraft(detail: LegalKbRevisionDetailResponse): DocumentFormDraft {
     return {
         title: detail.document.title ?? '',
         documentNumber: detail.document.document_number ?? '',
@@ -366,7 +366,7 @@ function buildDocumentFormDraft(detail: KbV2RevisionDetailResponse): DocumentFor
     };
 }
 
-function documentFormDraftFromDom(fallback: DocumentFormDraft, detail: KbV2RevisionDetailResponse): DocumentFormDraft {
+function documentFormDraftFromDom(fallback: DocumentFormDraft, detail: LegalKbRevisionDetailResponse): DocumentFormDraft {
     if (typeof document === 'undefined') return fallback;
     const value = (id: string, fallbackValue: string) => {
         const element = document.getElementById(id);
@@ -381,18 +381,18 @@ function documentFormDraftFromDom(fallback: DocumentFormDraft, detail: KbV2Revis
     };
 
     return {
-        title: value('kbv2-editor-title', fallback.title),
-        documentNumber: value('kbv2-editor-number', fallback.documentNumber),
-        documentType: normalizeDocumentType(value('kbv2-editor-type', fallback.documentType || detail.document.document_type || 'UNKNOWN')) || 'UNKNOWN',
-        documentRole: normalizeDocumentRole(value('kbv2-editor-role', fallback.documentRole || documentRoleFromMetadata(detail.document.metadata_json) || 'primary')) || 'primary',
-        issuingAuthority: value('kbv2-editor-issuer', fallback.issuingAuthority),
-        issuedDate: value('kbv2-editor-issued-date', fallback.issuedDate),
-        effectiveDate: value('kbv2-editor-effective-date', fallback.effectiveDate),
-        expiryDate: value('kbv2-editor-expiry-date', fallback.expiryDate),
-        sourceUrl: value('kbv2-editor-source-url', fallback.sourceUrl),
-        sourceDownloadedAt: value('kbv2-editor-source-downloaded-at', fallback.sourceDownloadedAt),
-        sourceFileName: value('kbv2-editor-source-file-name', fallback.sourceFileName),
-        summary: value('kbv2-editor-summary', fallback.summary),
+        title: value('legal-kb-editor-title', fallback.title),
+        documentNumber: value('legal-kb-editor-number', fallback.documentNumber),
+        documentType: normalizeDocumentType(value('legal-kb-editor-type', fallback.documentType || detail.document.document_type || 'UNKNOWN')) || 'UNKNOWN',
+        documentRole: normalizeDocumentRole(value('legal-kb-editor-role', fallback.documentRole || documentRoleFromMetadata(detail.document.metadata_json) || 'primary')) || 'primary',
+        issuingAuthority: value('legal-kb-editor-issuer', fallback.issuingAuthority),
+        issuedDate: value('legal-kb-editor-issued-date', fallback.issuedDate),
+        effectiveDate: value('legal-kb-editor-effective-date', fallback.effectiveDate),
+        expiryDate: value('legal-kb-editor-expiry-date', fallback.expiryDate),
+        sourceUrl: value('legal-kb-editor-source-url', fallback.sourceUrl),
+        sourceDownloadedAt: value('legal-kb-editor-source-downloaded-at', fallback.sourceDownloadedAt),
+        sourceFileName: value('legal-kb-editor-source-file-name', fallback.sourceFileName),
+        summary: value('legal-kb-editor-summary', fallback.summary),
     };
 }
 
@@ -532,7 +532,7 @@ function RelationTargetCombobox({
     );
 }
 
-function parserWarnings(detail: KbV2RevisionDetailResponse | null) {
+function parserWarnings(detail: LegalKbRevisionDetailResponse | null) {
     if (!detail) return [];
     const createdEvent = detail.review_events.find((event) => event.decision === 'created');
     const warnings = createdEvent?.details?.parser_warnings;
@@ -566,7 +566,7 @@ function localizeReviewWarning(value: string) {
     return normalized;
 }
 
-function reviewWarningMessages(detail: KbV2RevisionDetailResponse | null) {
+function reviewWarningMessages(detail: LegalKbRevisionDetailResponse | null) {
     if (!detail) return [];
     return Array.from(new Set([
         ...detail.publish_blockers.map((warning) => localizeReviewWarning(warning)),
@@ -574,39 +574,39 @@ function reviewWarningMessages(detail: KbV2RevisionDetailResponse | null) {
     ]));
 }
 
-function needsUsageDecision(item: KbV2CanonicalNodeOut) {
+function needsUsageDecision(item: LegalKbNodeOut) {
     if (Boolean(item.structured_content?.review_only)) return false;
     return ['appendix', 'form', 'image_caption', 'table'].includes(item.node_type)
         && !Object.prototype.hasOwnProperty.call(item.structured_content || {}, 'answerable');
 }
 
-function isRiskyContent(item: KbV2CanonicalNodeOut) {
+function isRiskyContent(item: LegalKbNodeOut) {
     return ['appendix', 'form', 'image_caption', 'table'].includes(item.node_type);
 }
 
-function needsManualContentReview(item: KbV2CanonicalNodeOut) {
+function needsManualContentReview(item: LegalKbNodeOut) {
     return isRiskyContent(item) && (item.review_status === 'needs_review' || needsUsageDecision(item));
 }
 
-function isReferenceOnly(item: KbV2CanonicalNodeOut) {
+function isReferenceOnly(item: LegalKbNodeOut) {
     return Boolean(item.structured_content?.review_only) || item.structured_content?.answerable === false;
 }
 
-function isAdminResolvedRiskyItem(item: KbV2CanonicalNodeOut) {
+function isAdminResolvedRiskyItem(item: LegalKbNodeOut) {
     return item.structured_content?.review_decision_source === 'admin'
         || item.structured_content?.review_only_role === 'admin_review_only'
         || typeof item.structured_content?.review_note === 'string';
 }
 
-function metadataNeedsReview(item: KbV2MetadataProposalOut) {
+function metadataNeedsReview(item: LegalKbMetadataProposalOut) {
     return item.review_status !== 'approved';
 }
 
-function relationNeedsReview(item: KbV2DocumentRelationOut) {
+function relationNeedsReview(item: LegalKbRelationOut) {
     return item.review_status !== 'approved';
 }
 
-function initialRelationDrafts(relations: KbV2DocumentRelationOut[]) {
+function initialRelationDrafts(relations: LegalKbRelationOut[]) {
     return Object.fromEntries(relations.map((relation) => [
         relation.relation_id,
         {
@@ -619,15 +619,15 @@ function initialRelationDrafts(relations: KbV2DocumentRelationOut[]) {
     ]));
 }
 
-function initialMetadataDrafts(proposals: KbV2MetadataProposalOut[]) {
+function initialMetadataDrafts(proposals: LegalKbMetadataProposalOut[]) {
     return Object.fromEntries(proposals.map((proposal) => [proposal.proposal_id, proposal.proposed_value]));
 }
 
-function initialContentNotes(items: KbV2CanonicalNodeOut[]) {
+function initialContentNotes(items: LegalKbNodeOut[]) {
     return Object.fromEntries(items.map((item) => [item.node_id, String(item.structured_content?.review_note || '')]));
 }
 
-function queueTitle(item: KbV2RevisionListItem) {
+function queueTitle(item: LegalKbRevisionListItem) {
     return item.title || item.document_number || item.document_id;
 }
 
@@ -636,18 +636,18 @@ function reviewSummaryStatusLabel(value: string | null | undefined) {
     return formatReviewStatus(value);
 }
 
-function revisionPendingCount(item: KbV2RevisionListItem) {
+function revisionPendingCount(item: LegalKbRevisionListItem) {
     const summaryPending = item.summary_status && item.summary_status !== 'approved' ? 1 : 0;
     return item.pending_metadata_count + item.pending_relations_count + item.pending_risky_nodes_count + summaryPending;
 }
 
-function revisionPendingLabel(item: KbV2RevisionListItem) {
+function revisionPendingLabel(item: LegalKbRevisionListItem) {
     const total = revisionPendingCount(item);
     if (total === 0) return 'S\u1eb5n s\u00e0ng';
     return `C\u00f2n ${total} vi\u1ec7c`;
 }
 
-function revisionTimestampMeta(item: KbV2RevisionListItem) {
+function revisionTimestampMeta(item: LegalKbRevisionListItem) {
     if (item.updated_at) {
         return `C\u1eadp nh\u1eadt g\u1ea7n nh\u1ea5t ${formatDateTime(item.updated_at)}`;
     }
@@ -698,11 +698,11 @@ function reviewEventNote(details: Record<string, unknown> | null | undefined) {
         : 'Không có ghi chú bổ sung cho lần xử lý này.';
 }
 
-function sourceDownloadPath(detail: KbV2RevisionDetailResponse) {
-    return `/api/v1/admin/kb-v2/revisions/${detail.revision.revision_id}/source`;
+function sourceDownloadPath(detail: LegalKbRevisionDetailResponse) {
+    return `/api/v1/admin/legal-kb/revisions/${detail.revision.revision_id}/source`;
 }
 
-function sortReviewEventsByNewest(detail: KbV2RevisionDetailResponse) {
+function sortReviewEventsByNewest(detail: LegalKbRevisionDetailResponse) {
     return [...detail.review_events].sort((left, right) => {
         const leftValue = Date.parse(left.created_at || '');
         const rightValue = Date.parse(right.created_at || '');
@@ -710,18 +710,18 @@ function sortReviewEventsByNewest(detail: KbV2RevisionDetailResponse) {
     });
 }
 
-export default function KbV2AdminWorkspace() {
+export default function LegalKbAdminWorkspace() {
     const [loading, setLoading] = React.useState(false);
     const [slowLoading, setSlowLoading] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
-    const [listResponse, setListResponse] = React.useState<KbV2RevisionListResponse | null>(null);
+    const [listResponse, setListResponse] = React.useState<LegalKbRevisionListResponse | null>(null);
     const [page, setPage] = React.useState(1);
     const [query, setQuery] = React.useState('');
     const [statusFilter, setStatusFilter] = React.useState<string>('draft');
     const [selectedRevisionId, setSelectedRevisionId] = React.useState<string | null>(null);
     const [expandedRevisionId, setExpandedRevisionId] = React.useState<string | null>(null);
     const [editorRevisionId, setEditorRevisionId] = React.useState<string | null>(null);
-    const [detail, setDetail] = React.useState<KbV2RevisionDetailResponse | null>(null);
+    const [detail, setDetail] = React.useState<LegalKbRevisionDetailResponse | null>(null);
     const [detailLoading, setDetailLoading] = React.useState(false);
     const [actionError, setActionError] = React.useState<string | null>(null);
     const [uploadDraft, setUploadDraft] = React.useState<UploadDraft>(EMPTY_UPLOAD_DRAFT);
@@ -729,7 +729,7 @@ export default function KbV2AdminWorkspace() {
     const [uploadPhase, setUploadPhase] = React.useState<UploadPhase>('idle');
     const [uploadMessage, setUploadMessage] = React.useState<string | null>(null);
     const [uploadOpen, setUploadOpen] = React.useState(false);
-    const [downloadDetail, setDownloadDetail] = React.useState<KbV2RevisionDetailResponse | null>(null);
+    const [downloadDetail, setDownloadDetail] = React.useState<LegalKbRevisionDetailResponse | null>(null);
     const [documentDraft, setDocumentDraft] = React.useState<DocumentFormDraft | null>(null);
     const [metadataDrafts, setMetadataDrafts] = React.useState<Record<string, string>>({});
     const [relationDrafts, setRelationDrafts] = React.useState<Record<string, RelationDraft>>({});
@@ -740,7 +740,7 @@ export default function KbV2AdminWorkspace() {
     const [publishPhase, setPublishPhase] = React.useState<PublishPhase>('idle');
     const [reviewHistoryPage, setReviewHistoryPage] = React.useState(1);
     const [statusCounts, setStatusCounts] = React.useState<Record<string, number>>({});
-    const [relationTargetDocuments, setRelationTargetDocuments] = React.useState<KbV2RelationTargetItem[]>([]);
+    const [relationTargetDocuments, setRelationTargetDocuments] = React.useState<LegalKbRelationTargetItem[]>([]);
     const [pendingConfirmation, setPendingConfirmation] = React.useState<WorkspaceConfirmation | null>(null);
     const metadataSectionRef = React.useRef<HTMLDetailsElement | null>(null);
     const relationSectionRef = React.useRef<HTMLDetailsElement | null>(null);
@@ -762,7 +762,7 @@ export default function KbV2AdminWorkspace() {
 
     const searchRelationTargets = React.useCallback(async (searchQuery: string) => {
         try {
-            const response = await fetchKbV2RelationTargets({
+            const response = await fetchLegalKbRelationTargets({
                 q: searchQuery || undefined,
                 exclude_document_id: currentDocumentId,
                 limit: 100,
@@ -775,7 +775,7 @@ export default function KbV2AdminWorkspace() {
         }
     }, [currentDocumentId]);
 
-    const applyRevisionDetail = React.useCallback((response: KbV2RevisionDetailResponse) => {
+    const applyRevisionDetail = React.useCallback((response: LegalKbRevisionDetailResponse) => {
         setDetail(response);
         setListResponse((current) => {
             if (!current || !statusFilter || response.revision.publication_status === statusFilter) {
@@ -810,13 +810,13 @@ export default function KbV2AdminWorkspace() {
             const normalizedStatus = publicationStatus || '';
             const normalizedQuery = searchText.trim();
             const [response, ...statusResponses] = await Promise.all([
-                fetchKbV2RevisionList({
+                fetchLegalKbRevisionList({
                     page: nextPage,
                     page_size: PAGE_SIZE,
                     publication_status: normalizedStatus || undefined,
                     q: normalizedQuery || undefined,
                 }),
-                ...REVIEW_STATUS_OPTIONS.map((statusOption) => fetchKbV2RevisionList({
+                ...REVIEW_STATUS_OPTIONS.map((statusOption) => fetchLegalKbRevisionList({
                     page: 1,
                     page_size: 1,
                     publication_status: statusOption.value,
@@ -853,7 +853,7 @@ export default function KbV2AdminWorkspace() {
         setActionError(null);
         setEditorMessage(null);
         try {
-            const response = await fetchKbV2RevisionDetail(revisionId);
+            const response = await fetchLegalKbRevisionDetail(revisionId);
             applyRevisionDetail(response);
             return response;
         } catch (err) {
@@ -987,7 +987,7 @@ export default function KbV2AdminWorkspace() {
         setUploading(true);
         setUploadMessage(null);
         try {
-            const response = await uploadKbV2Revision({
+            const response = await uploadLegalKbRevision({
                 file: uploadDraft.file,
                 title: uploadDraft.title,
                 source_url: uploadDraft.sourceUrl,
@@ -1008,7 +1008,7 @@ export default function KbV2AdminWorkspace() {
             setUploadOpen(false);
             await openTransferredRevision(revisionId);
         } catch (err) {
-            if (err instanceof KbV2DuplicateSourceError && err.revisionId) {
+            if (err instanceof LegalKbDuplicateSourceError && err.revisionId) {
                 const revisionId = err.revisionId;
                 setUploadMessage(null);
                 setUploadPhase('opening');
@@ -1063,14 +1063,14 @@ export default function KbV2AdminWorkspace() {
         setActionError(null);
         try {
             setPublishPhase('publishing');
-            const response = await publishKbV2Revision(selectedRevisionId);
+            const response = await publishLegalKbRevision(selectedRevisionId);
             applyRevisionDetail(response);
             setPublishPhase('refreshing');
             setStatusFilter('published');
             await loadList(1, 'published');
             setSelectedRevisionId(selectedRevisionId);
             setExpandedRevisionId(selectedRevisionId);
-            const refreshed = await fetchKbV2RevisionDetail(selectedRevisionId);
+            const refreshed = await fetchLegalKbRevisionDetail(selectedRevisionId);
             applyRevisionDetail(refreshed);
             setPublishPhase('done');
         } catch (err) {
@@ -1152,7 +1152,7 @@ export default function KbV2AdminWorkspace() {
                     ...changedEntries.map((field) => [field, nextValues[field] || null] as const),
                     ...changedSourceEntries.map((field) => [field, nextSourceValues[field] || null] as const),
                 ]);
-                const response = await updateKbV2PublishedDocument(detail.document.document_id, payload);
+                const response = await updateLegalKbPublishedDocument(detail.document.document_id, payload);
                 setDetail(response);
                 setDocumentDraft(buildDocumentFormDraft(response));
                 setMetadataDrafts(initialMetadataDrafts(response.metadata_proposals));
@@ -1164,14 +1164,14 @@ export default function KbV2AdminWorkspace() {
                     );
                     const proposal = existingProposal
                         ? existingProposal
-                        : await createKbV2MetadataProposal(detail.revision.revision_id, {
+                        : await createLegalKbMetadataProposal(detail.revision.revision_id, {
                             field_name: field,
                             proposed_value: nextValues[field],
                         });
-                    await reviewKbV2MetadataProposal(proposal.proposal_id, 'approved', undefined, nextValues[field]);
+                    await reviewLegalKbMetadataProposal(proposal.proposal_id, 'approved', undefined, nextValues[field]);
                 }
                 if (changedSourceEntries.length > 0) {
-                    await updateKbV2RevisionSource(detail.revision.revision_id, Object.fromEntries(
+                    await updateLegalKbRevisionSource(detail.revision.revision_id, Object.fromEntries(
                         changedSourceEntries.map((field) => [field, nextSourceValues[field] || null]),
                     ));
                 }
@@ -1179,7 +1179,7 @@ export default function KbV2AdminWorkspace() {
             }
 
             if (summaryChanged && detail.summary) {
-                await reviewKbV2Summary(detail.summary.summary_id, {
+                await reviewLegalKbSummary(detail.summary.summary_id, {
                     decision: 'approved',
                     content: currentDraft.summary,
                 });
@@ -1206,7 +1206,7 @@ export default function KbV2AdminWorkspace() {
         setActionError(null);
         setEditorMessage(null);
         try {
-            await reviewKbV2MetadataProposal(
+            await reviewLegalKbMetadataProposal(
                 proposalId,
                 decision,
                 undefined,
@@ -1225,7 +1225,7 @@ export default function KbV2AdminWorkspace() {
         setActionError(null);
         setEditorMessage(null);
         try {
-            await reviewKbV2Relation(relationId, decision, relationDrafts[relationId]?.note);
+            await reviewLegalKbRelation(relationId, decision, relationDrafts[relationId]?.note);
             await refreshSelected();
         } catch (err) {
             setActionError(err instanceof Error ? err.message : 'Không thể lưu quyết định cho quan hệ văn bản.');
@@ -1245,7 +1245,7 @@ export default function KbV2AdminWorkspace() {
         setActionError(null);
         setEditorMessage(null);
         try {
-            await updateKbV2Relation(relationId, {
+            await updateLegalKbRelation(relationId, {
                 target_document_id: draft.targetDocumentId,
                 relation_type: draft.relationType,
                 source_locator: draft.sourceLocator || undefined,
@@ -1260,7 +1260,7 @@ export default function KbV2AdminWorkspace() {
         }
     }
 
-    async function handleRelationReset(relation: KbV2DocumentRelationOut, confirmed = false) {
+    async function handleRelationReset(relation: LegalKbRelationOut, confirmed = false) {
         if (!confirmed) {
             setPendingConfirmation({ kind: 'relation-reset', relation });
             return;
@@ -1270,7 +1270,7 @@ export default function KbV2AdminWorkspace() {
         setActionError(null);
         setEditorMessage(null);
         try {
-            await updateKbV2Relation(relation.relation_id, {
+            await updateLegalKbRelation(relation.relation_id, {
                 target_document_id: draft.targetDocumentId || relation.target_document_id,
                 relation_type: draft.relationType || relation.relation_type as RelationType,
                 source_locator: draft.sourceLocator || relation.source_locator || undefined,
@@ -1286,7 +1286,7 @@ export default function KbV2AdminWorkspace() {
         }
     }
 
-    async function handleRelationDelete(relation: KbV2DocumentRelationOut, confirmed = false) {
+    async function handleRelationDelete(relation: LegalKbRelationOut, confirmed = false) {
         if (!confirmed) {
             setPendingConfirmation({ kind: 'relation-delete', relation });
             return;
@@ -1295,7 +1295,7 @@ export default function KbV2AdminWorkspace() {
         setActionError(null);
         setEditorMessage(null);
         try {
-            await deleteKbV2Relation(relation.relation_id);
+            await deleteLegalKbRelation(relation.relation_id);
             await refreshSelected();
             setEditorMessage('Đã loại bỏ quan hệ văn bản.');
         } catch (err) {
@@ -1311,7 +1311,7 @@ export default function KbV2AdminWorkspace() {
         setActionError(null);
         setEditorMessage(null);
         try {
-            await createKbV2RelationProposal(detail.revision.revision_id, {
+            await createLegalKbRelationProposal(detail.revision.revision_id, {
                 target_document_id: newRelationDraft.targetDocumentId,
                 relation_type: newRelationDraft.relationType,
                 source_locator: newRelationDraft.sourceLocator || undefined,
@@ -1326,12 +1326,12 @@ export default function KbV2AdminWorkspace() {
         }
     }
 
-    async function handleContentReview(item: KbV2CanonicalNodeOut, decision: 'approved' | 'rejected', usableForAnswers?: boolean) {
+    async function handleContentReview(item: LegalKbNodeOut, decision: 'approved' | 'rejected', usableForAnswers?: boolean) {
         setBusyKey(`content:${item.node_id}:${decision}`);
         setActionError(null);
         setEditorMessage(null);
         try {
-            await reviewKbV2Node(item.node_id, decision, contentNotes[item.node_id], usableForAnswers);
+            await reviewLegalKbNode(item.node_id, decision, contentNotes[item.node_id], usableForAnswers);
             await refreshSelected();
         } catch (err) {
             setActionError(err instanceof Error ? err.message : 'Không thể lưu quyết định cho mục nội dung.');
@@ -1340,7 +1340,7 @@ export default function KbV2AdminWorkspace() {
         }
     }
 
-    async function handleResetContentReview(item: KbV2CanonicalNodeOut, confirmed = false) {
+    async function handleResetContentReview(item: LegalKbNodeOut, confirmed = false) {
         if (!confirmed) {
             setPendingConfirmation({ kind: 'content-reset', item });
             return;
@@ -1349,7 +1349,7 @@ export default function KbV2AdminWorkspace() {
         setActionError(null);
         setEditorMessage(null);
         try {
-            await resetKbV2NodeReview(item.node_id, contentNotes[item.node_id]);
+            await resetLegalKbNodeReview(item.node_id, contentNotes[item.node_id]);
             await refreshSelected();
             setEditorMessage('Đã đưa mục nội dung về nhóm cần xử lý để chọn lại quyết định.');
         } catch (err) {
@@ -1750,9 +1750,9 @@ export default function KbV2AdminWorkspace() {
                         </div>
                         <div className="admin-modal-body review-upload-dialog-body">
                             <form className={`review-upload-grid review-upload-grid-modern ${uploading ? 'is-uploading' : ''}`} onSubmit={handleUpload}>
-                                <label className="filter-group review-field-full" htmlFor="kbv2-preset">
+                                <label className="filter-group review-field-full" htmlFor="legal-kb-preset">
                                     <span>Mẫu điền nhanh</span>
-                                    <SelectControl id="kbv2-preset" value={uploadDraft.presetKey} onChange={(event) => handlePresetChange(event.target.value)}>
+                                    <SelectControl id="legal-kb-preset" value={uploadDraft.presetKey} onChange={(event) => handlePresetChange(event.target.value)}>
                                         <option value="">Tự nhập toàn bộ thông tin</option>
                                         {DOCUMENT_CORPUS_PRESETS.map((preset) => (
                                             <option key={preset.document_number} value={preset.document_number}>
@@ -1762,84 +1762,84 @@ export default function KbV2AdminWorkspace() {
                                     </SelectControl>
                                 </label>
 
-                                <label className="review-file-drop review-field-full" htmlFor="kbv2-file">
+                                <label className="review-file-drop review-field-full" htmlFor="legal-kb-file">
                                     <FileArrowUp size={22} />
                                     <span>{uploadDraft.file?.name || 'Chọn file DOCX để tạo hồ sơ'}</span>
                                     <small>File mới chỉ được dùng cho tra cứu và chatbot sau khi hồ sơ được duyệt và đưa vào kho.</small>
                                     <input
-                                        id="kbv2-file"
+                                        id="legal-kb-file"
                                         type="file"
                                         accept=".docx"
                                         onChange={(event) => setUploadDraft((current) => ({ ...current, file: event.target.files?.[0] ?? null }))}
                                     />
                                 </label>
 
-                                <label className="filter-group review-field-span" htmlFor="kbv2-title">
+                                <label className="filter-group review-field-span" htmlFor="legal-kb-title">
                                     <span>Tiêu đề văn bản</span>
                                     <input
-                                        id="kbv2-title"
+                                        id="legal-kb-title"
                                         required
                                         value={uploadDraft.title}
                                         onChange={(event) => setUploadDraft((current) => ({ ...current, title: event.target.value }))}
                                     />
                                 </label>
 
-                                <label className="filter-group" htmlFor="kbv2-number">
+                                <label className="filter-group" htmlFor="legal-kb-number">
                                     <span>Số hiệu</span>
-                                    <input id="kbv2-number" value={uploadDraft.documentNumber} onChange={(event) => setUploadDraft((current) => ({ ...current, documentNumber: event.target.value }))} />
+                                    <input id="legal-kb-number" value={uploadDraft.documentNumber} onChange={(event) => setUploadDraft((current) => ({ ...current, documentNumber: event.target.value }))} />
                                 </label>
 
-                                <label className="filter-group" htmlFor="kbv2-type">
+                                <label className="filter-group" htmlFor="legal-kb-type">
                                     <span>Loại văn bản</span>
-                                    <SelectControl id="kbv2-type" value={uploadDraft.documentType} onChange={(event) => setUploadDraft((current) => ({ ...current, documentType: event.target.value }))}>
+                                    <SelectControl id="legal-kb-type" value={uploadDraft.documentType} onChange={(event) => setUploadDraft((current) => ({ ...current, documentType: event.target.value }))}>
                                         {DOCUMENT_TYPE_OPTIONS.map((option) => (
                                             <option key={option.value} value={option.value}>{option.label}</option>
                                         ))}
                                     </SelectControl>
                                 </label>
 
-                                <label className="filter-group" htmlFor="kbv2-role">
+                                <label className="filter-group" htmlFor="legal-kb-role">
                                     <span>Vai trò văn bản</span>
-                                    <SelectControl id="kbv2-role" value={uploadDraft.documentRole} onChange={(event) => setUploadDraft((current) => ({ ...current, documentRole: event.target.value }))}>
+                                    <SelectControl id="legal-kb-role" value={uploadDraft.documentRole} onChange={(event) => setUploadDraft((current) => ({ ...current, documentRole: event.target.value }))}>
                                         {DOCUMENT_ROLE_OPTIONS.map((option) => (
                                             <option key={option.value} value={option.value}>{option.label}</option>
                                         ))}
                                     </SelectControl>
                                 </label>
 
-                                <label className="filter-group" htmlFor="kbv2-issuer">
+                                <label className="filter-group" htmlFor="legal-kb-issuer">
                                     <span>Cơ quan ban hành</span>
-                                    <input id="kbv2-issuer" value={uploadDraft.issuingAuthority} onChange={(event) => setUploadDraft((current) => ({ ...current, issuingAuthority: event.target.value }))} />
+                                    <input id="legal-kb-issuer" value={uploadDraft.issuingAuthority} onChange={(event) => setUploadDraft((current) => ({ ...current, issuingAuthority: event.target.value }))} />
                                 </label>
 
-                                <label className="filter-group" htmlFor="kbv2-issued-date">
+                                <label className="filter-group" htmlFor="legal-kb-issued-date">
                                     <span>Ngày ban hành</span>
-                                    <DateInput id="kbv2-issued-date" value={uploadDraft.issuedDate} onChange={(value) => setUploadDraft((current) => ({ ...current, issuedDate: value }))} />
+                                    <DateInput id="legal-kb-issued-date" value={uploadDraft.issuedDate} onChange={(value) => setUploadDraft((current) => ({ ...current, issuedDate: value }))} />
                                 </label>
 
-                                <label className="filter-group" htmlFor="kbv2-effective-date">
+                                <label className="filter-group" htmlFor="legal-kb-effective-date">
                                     <span>Ngày có hiệu lực</span>
-                                    <DateInput id="kbv2-effective-date" value={uploadDraft.effectiveDate} onChange={(value) => setUploadDraft((current) => ({ ...current, effectiveDate: value }))} />
+                                    <DateInput id="legal-kb-effective-date" value={uploadDraft.effectiveDate} onChange={(value) => setUploadDraft((current) => ({ ...current, effectiveDate: value }))} />
                                 </label>
 
-                                <label className="filter-group" htmlFor="kbv2-expiry-date">
+                                <label className="filter-group" htmlFor="legal-kb-expiry-date">
                                     <span>Ngày hết hiệu lực</span>
-                                    <DateInput id="kbv2-expiry-date" value={uploadDraft.expiryDate} onChange={(value) => setUploadDraft((current) => ({ ...current, expiryDate: value }))} />
+                                    <DateInput id="legal-kb-expiry-date" value={uploadDraft.expiryDate} onChange={(value) => setUploadDraft((current) => ({ ...current, expiryDate: value }))} />
                                 </label>
 
-                                <label className="filter-group review-field-span" htmlFor="kbv2-source-url">
+                                <label className="filter-group review-field-span" htmlFor="legal-kb-source-url">
                                     <span>Đường dẫn nguồn</span>
-                                    <input id="kbv2-source-url" value={uploadDraft.sourceUrl} onChange={(event) => setUploadDraft((current) => ({ ...current, sourceUrl: event.target.value }))} required />
+                                    <input id="legal-kb-source-url" value={uploadDraft.sourceUrl} onChange={(event) => setUploadDraft((current) => ({ ...current, sourceUrl: event.target.value }))} required />
                                 </label>
 
-                                <label className="filter-group" htmlFor="kbv2-downloaded-at">
+                                <label className="filter-group" htmlFor="legal-kb-downloaded-at">
                                     <span>Ngày lấy nguồn</span>
-                                    <DateInput id="kbv2-downloaded-at" value={uploadDraft.sourceDownloadedAt} onChange={(value) => setUploadDraft((current) => ({ ...current, sourceDownloadedAt: value }))} required />
+                                    <DateInput id="legal-kb-downloaded-at" value={uploadDraft.sourceDownloadedAt} onChange={(value) => setUploadDraft((current) => ({ ...current, sourceDownloadedAt: value }))} required />
                                 </label>
 
-                                <label className="filter-group review-field-span" htmlFor="kbv2-note">
+                                <label className="filter-group review-field-span" htmlFor="legal-kb-note">
                                     <span>Ghi chú nguồn</span>
-                                    <input id="kbv2-note" value={uploadDraft.sourceNote} onChange={(event) => setUploadDraft((current) => ({ ...current, sourceNote: event.target.value }))} required />
+                                    <input id="legal-kb-note" value={uploadDraft.sourceNote} onChange={(event) => setUploadDraft((current) => ({ ...current, sourceNote: event.target.value }))} required />
                                 </label>
 
                                 <section className="review-upload-next review-field-full" aria-live="polite">
@@ -2002,10 +2002,10 @@ export default function KbV2AdminWorkspace() {
                                                     void handleDocumentSave();
                                                 }}
                                             >
-                                                <label className="filter-group review-field-span" htmlFor="kbv2-editor-title">
+                                                <label className="filter-group review-field-span" htmlFor="legal-kb-editor-title">
                                                     <span>Tiêu đề văn bản</span>
                                                     <input
-                                                        id="kbv2-editor-title"
+                                                        id="legal-kb-editor-title"
                                                         value={documentDraft?.title ?? ''}
                                                         onChange={(event) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2014,10 +2014,10 @@ export default function KbV2AdminWorkspace() {
                                                     />
                                                 </label>
 
-                                                <label className="filter-group" htmlFor="kbv2-editor-number">
+                                                <label className="filter-group" htmlFor="legal-kb-editor-number">
                                                     <span>Số hiệu</span>
                                                     <input
-                                                        id="kbv2-editor-number"
+                                                        id="legal-kb-editor-number"
                                                         value={documentDraft?.documentNumber ?? ''}
                                                         onChange={(event) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2026,10 +2026,10 @@ export default function KbV2AdminWorkspace() {
                                                     />
                                                 </label>
 
-                                                <label className="filter-group" htmlFor="kbv2-editor-type">
+                                                <label className="filter-group" htmlFor="legal-kb-editor-type">
                                                     <span>Loại văn bản</span>
                                                     <SelectControl
-                                                        id="kbv2-editor-type"
+                                                        id="legal-kb-editor-type"
                                                         value={documentDraft?.documentType ?? 'UNKNOWN'}
                                                         onChange={(event) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2042,10 +2042,10 @@ export default function KbV2AdminWorkspace() {
                                                     </SelectControl>
                                                 </label>
 
-                                                <label className="filter-group" htmlFor="kbv2-editor-role">
+                                                <label className="filter-group" htmlFor="legal-kb-editor-role">
                                                     <span>Vai trò văn bản</span>
                                                     <SelectControl
-                                                        id="kbv2-editor-role"
+                                                        id="legal-kb-editor-role"
                                                         value={documentDraft?.documentRole ?? 'primary'}
                                                         onChange={(event) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2058,10 +2058,10 @@ export default function KbV2AdminWorkspace() {
                                                     </SelectControl>
                                                 </label>
 
-                                                <label className="filter-group" htmlFor="kbv2-editor-issuer">
+                                                <label className="filter-group" htmlFor="legal-kb-editor-issuer">
                                                     <span>Cơ quan ban hành</span>
                                                     <input
-                                                        id="kbv2-editor-issuer"
+                                                        id="legal-kb-editor-issuer"
                                                         value={documentDraft?.issuingAuthority ?? ''}
                                                         onChange={(event) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2070,10 +2070,10 @@ export default function KbV2AdminWorkspace() {
                                                     />
                                                 </label>
 
-                                                <label className="filter-group" htmlFor="kbv2-editor-issued-date">
+                                                <label className="filter-group" htmlFor="legal-kb-editor-issued-date">
                                                     <span>Ngày ban hành</span>
                                                     <DateInput
-                                                        id="kbv2-editor-issued-date"
+                                                        id="legal-kb-editor-issued-date"
                                                         value={documentDraft?.issuedDate ?? ''}
                                                         onChange={(value) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2082,10 +2082,10 @@ export default function KbV2AdminWorkspace() {
                                                     />
                                                 </label>
 
-                                                <label className="filter-group" htmlFor="kbv2-editor-effective-date">
+                                                <label className="filter-group" htmlFor="legal-kb-editor-effective-date">
                                                     <span>Ngày có hiệu lực</span>
                                                     <DateInput
-                                                        id="kbv2-editor-effective-date"
+                                                        id="legal-kb-editor-effective-date"
                                                         value={documentDraft?.effectiveDate ?? ''}
                                                         onChange={(value) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2094,10 +2094,10 @@ export default function KbV2AdminWorkspace() {
                                                     />
                                                 </label>
 
-                                                <label className="filter-group" htmlFor="kbv2-editor-expiry-date">
+                                                <label className="filter-group" htmlFor="legal-kb-editor-expiry-date">
                                                     <span>Ngày hết hiệu lực</span>
                                                     <DateInput
-                                                        id="kbv2-editor-expiry-date"
+                                                        id="legal-kb-editor-expiry-date"
                                                         value={documentDraft?.expiryDate ?? ''}
                                                         onChange={(value) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2106,10 +2106,10 @@ export default function KbV2AdminWorkspace() {
                                                     />
                                                 </label>
 
-                                                <label className="filter-group" htmlFor="kbv2-editor-source-url">
+                                                <label className="filter-group" htmlFor="legal-kb-editor-source-url">
                                                     <span>Đường dẫn nguồn</span>
                                                     <input
-                                                        id="kbv2-editor-source-url"
+                                                        id="legal-kb-editor-source-url"
                                                         value={documentDraft?.sourceUrl ?? ''}
                                                         onChange={(event) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2118,10 +2118,10 @@ export default function KbV2AdminWorkspace() {
                                                     />
                                                 </label>
 
-                                                <label className="filter-group" htmlFor="kbv2-editor-source-downloaded-at">
+                                                <label className="filter-group" htmlFor="legal-kb-editor-source-downloaded-at">
                                                     <span>Ngày lấy nguồn</span>
                                                     <DateInput
-                                                        id="kbv2-editor-source-downloaded-at"
+                                                        id="legal-kb-editor-source-downloaded-at"
                                                         value={documentDraft?.sourceDownloadedAt ?? ''}
                                                         onChange={(value) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2130,10 +2130,10 @@ export default function KbV2AdminWorkspace() {
                                                     />
                                                 </label>
 
-                                                <label className="filter-group" htmlFor="kbv2-editor-source-file-name">
+                                                <label className="filter-group" htmlFor="legal-kb-editor-source-file-name">
                                                     <span>File nguồn</span>
                                                     <input
-                                                        id="kbv2-editor-source-file-name"
+                                                        id="legal-kb-editor-source-file-name"
                                                         value={documentDraft?.sourceFileName ?? ''}
                                                         onChange={(event) => setDocumentDraft((current) => ({
                                                             ...(current ?? buildDocumentFormDraft(detail)),
@@ -2142,10 +2142,10 @@ export default function KbV2AdminWorkspace() {
                                                     />
                                                 </label>
 
-                                                <label className="filter-group review-field-full" htmlFor="kbv2-editor-summary">
+                                                <label className="filter-group review-field-full" htmlFor="legal-kb-editor-summary">
                                                     <span>Tóm tắt</span>
                                                     <AutoResizeTextarea
-                                                        id="kbv2-editor-summary"
+                                                        id="legal-kb-editor-summary"
                                                         maxRows={8}
                                                         minRows={3}
                                                         value={documentDraft?.summary ?? ''}
@@ -2212,7 +2212,7 @@ export default function KbV2AdminWorkspace() {
                                                     <label className="filter-group">
                                                         <span>Mã văn bản liên quan</span>
                                                         <RelationTargetCombobox
-                                                            id="kbv2-new-relation-target"
+                                                            id="legal-kb-new-relation-target"
                                                             options={relatedDocumentOptions}
                                                             value={newRelationDraft.targetDocumentId}
                                                             onSearch={searchRelationTargets}
@@ -2268,7 +2268,7 @@ export default function KbV2AdminWorkspace() {
                                                                         <label className="filter-group">
                                                                             <span>Mã văn bản liên quan</span>
                                                                             <RelationTargetCombobox
-                                                                                id={`kbv2-relation-target-${relation.relation_id}`}
+                                                                                id={`legal-kb-relation-target-${relation.relation_id}`}
                                                                                 options={relatedDocumentOptions}
                                                                                 value={draft.targetDocumentId}
                                                                                 onSearch={searchRelationTargets}

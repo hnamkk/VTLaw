@@ -1,4 +1,4 @@
-export type KbV2CorpusPreset = {
+export type LegalKbCorpusPreset = {
   priority: '1' | '2' | '3';
   document_title: string;
   document_number: string;
@@ -12,7 +12,7 @@ export type KbV2CorpusPreset = {
   notes: string;
 };
 
-export const DOCUMENT_CORPUS_PRESETS: KbV2CorpusPreset[] = [
+export const DOCUMENT_CORPUS_PRESETS: LegalKbCorpusPreset[] = [
   {
     priority: '1',
     document_title: 'Luật Đường bộ',
