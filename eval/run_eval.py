@@ -913,7 +913,8 @@ async def run_real_eval() -> EvalReport:
                 f"  Scope label: {result.get('scope_result').label if result.get('scope_result') else 'None'} (score: {result.get('scope_result').score if result.get('scope_result') else 0:.4f})"
             )
             print(f"  Retrieved Chunks: {len(retrieved_chunks)}")
-            print(f"  LLM Output: {llm_output.replace('\n', ' | ')[:1000]}...")
+            llm_output_preview = llm_output.replace("\n", " | ")[:1000]
+            print(f"  LLM Output: {llm_output_preview}...")
             print(
                 "  Retrieved Locators: "
                 f"{[(c.document_number, c.article_num, c.clause_num, c.point_num) for c in retrieved_chunks]}"
