@@ -7,17 +7,19 @@
 | Base URL (dev) | `http://localhost:8000/api/v1` |
 | Giao thức | HTTPS/REST + SSE |
 | Xác thực | JWT Bearer cho route `USER` và `ADMIN` |
-| Cập nhật gần nhất | 09/07/2026 |
+| Cập nhật gần nhất | 06/11/2026 |
 
 ---
 
 ## 1. Nguyên tắc chung
 
+- Lỗi trong luồng chat SSE trả `type="error"`, `trace_id` và `detail` tiếng Việt hướng dẫn thử lại. Không trả nội dung exception nội bộ cho client; lỗi sau khi mở stream được gửi qua event, không đổi HTTP status đã gửi.
+
 - Public documents, public source và chatbot chỉ dùng dữ liệu từ kho văn bản đang công bố với `legal_status='active'`.
 - Văn bản `suspended`, `expired`, `replaced` hoặc `annulled` không xuất hiện ở surface public hiện hành và không được dùng cho chatbot.
 - Chat historical/lifecycle chi di qua nhanh chuyen biet de tra metadata hoac `historical_references`; ngoai le nay khong lam rong active-only retrieval mac dinh.
-- Prefix `/api/v1/admin/kb-v2` được giữ để tương thích contract nội bộ hiện có. Frontend phải bọc các route này bằng tên trung lập theo ngữ cảnh `Kho văn bản`.
-- Tên bảng/model `kb_v2_*` chỉ là chi tiết schema nội bộ, không phải nhãn sản phẩm.
+- Prefix `/api/v1/admin/legal-kb` được giữ để tương thích contract nội bộ hiện có. Frontend phải bọc các route này bằng tên trung lập theo ngữ cảnh `Kho văn bản`.
+- Tên bảng/model `legal_kb_*` chỉ là chi tiết schema nội bộ, không phải nhãn sản phẩm.
 - Route legacy `admin_kb.py` không được mount trong runtime.
 
 ### 1.1 Mẫu lỗi
@@ -35,8 +37,8 @@ Các thông báo fallback phải dùng tiếng Việt dễ hiểu; không để 
 
 Runtime hiện tại của `Duyệt văn bản` dùng thêm hai fallback ổn định sau:
 
-- `GET /admin/kb-v2/revisions`: nếu lỗi serialize hoặc lỗi nội bộ ngoài nhóm `HTTPException`, API trả `500` với `detail.code = KB_DOCUMENT_LIST_UNAVAILABLE` và thông điệp `Hệ thống chưa thể tải danh sách hồ sơ duyệt văn bản. Vui lòng thử lại sau.`
-- `GET /admin/kb-v2/revisions/{revision_id}`: nếu lỗi serialize hoặc lỗi nội bộ ngoài nhóm `HTTPException`, API trả `500` với `detail.code = KB_REVISION_DETAIL_UNAVAILABLE` và thông điệp `Chưa thể mở chi tiết hồ sơ xử lý này. Vui lòng thử lại sau.`
+- `GET /admin/legal-kb/revisions`: nếu lỗi serialize hoặc lỗi nội bộ ngoài nhóm `HTTPException`, API trả `500` với `detail.code = KB_DOCUMENT_LIST_UNAVAILABLE` và thông điệp `Hệ thống chưa thể tải danh sách hồ sơ duyệt văn bản. Vui lòng thử lại sau.`
+- `GET /admin/legal-kb/revisions/{revision_id}`: nếu lỗi serialize hoặc lỗi nội bộ ngoài nhóm `HTTPException`, API trả `500` với `detail.code = KB_REVISION_DETAIL_UNAVAILABLE` và thông điệp `Chưa thể mở chi tiết hồ sơ xử lý này. Vui lòng thử lại sau.`
 
 ---
 
@@ -185,31 +187,31 @@ Runtime hiện tại của `Duyệt văn bản` dùng thêm hai fallback ổn đ
 
 | Method | Endpoint | Quyền | Mục đích |
 |---|---|---|---|
-| `POST` | `/admin/kb-v2/revisions/upload` | ADMIN | Tải DOCX vào luồng duyệt |
-| `GET` | `/admin/kb-v2/revisions` | ADMIN | Danh sách hồ sơ duyệt |
-| `GET` | `/admin/kb-v2/revisions/{revision_id}` | ADMIN | Chi tiết hồ sơ duyệt |
-| `GET` | `/admin/kb-v2/revisions/{revision_id}/source` | ADMIN | Tải file nguồn theo revision |
-| `GET` | `/admin/kb-v2/documents` | ADMIN | Danh sách văn bản đã hoặc từng công bố |
-| `GET` | `/admin/kb-v2/relation-targets` | ADMIN | Tìm văn bản đích để tạo quan hệ trên toàn bộ hồ sơ; hỗ trợ `q`, `exclude_document_id`, `limit` |
-| `GET` | `/admin/kb-v2/documents/{document_id}` | ADMIN | Chi tiết văn bản trong Kho văn bản |
-| `PATCH` | `/admin/kb-v2/documents/{document_id}` | ADMIN | Sửa metadata văn bản đã công bố |
-| `POST` | `/admin/kb-v2/documents/{document_id}/status` | ADMIN | Đổi trạng thái quản trị |
-| `POST` | `/admin/kb-v2/documents/{document_id}/replacement-revisions/upload` | ADMIN | Tạo hồ sơ thay file nguồn cho văn bản đang quản lý |
-| `POST` | `/admin/kb-v2/revisions/{revision_id}/metadata-proposals` | ADMIN | Tạo đề xuất metadata |
-| `POST` | `/admin/kb-v2/metadata-proposals/{proposal_id}/review` | ADMIN | Duyệt đề xuất metadata |
-| `POST` | `/admin/kb-v2/nodes/{node_id}/review` | ADMIN | Duyệt một mục nội dung |
-| `POST` | `/admin/kb-v2/nodes/{node_id}/reset-review` | ADMIN | Đưa mục nội dung về cần kiểm tra |
-| `POST` | `/admin/kb-v2/revisions/{revision_id}/risky-nodes/bulk-review` | ADMIN | Duyệt nhanh nhóm mục cần xem kỹ |
-| `POST` | `/admin/kb-v2/revisions/{revision_id}/relations` | ADMIN | Tạo quan hệ văn bản |
-| `POST` | `/admin/kb-v2/relations/{relation_id}/review` | ADMIN | Duyệt quan hệ |
-| `PATCH` | `/admin/kb-v2/relations/{relation_id}` | ADMIN | Sửa quan hệ |
-| `DELETE` | `/admin/kb-v2/relations/{relation_id}` | ADMIN | Loại bỏ quan hệ và ghi lịch sử xử lý |
-| `POST` | `/admin/kb-v2/summaries/{summary_id}/review` | ADMIN | Duyệt tóm tắt chuẩn |
-| `POST` | `/admin/kb-v2/revisions/{revision_id}/publish` | ADMIN | Công bố revision |
-| `POST` | `/admin/kb-v2/revisions/{revision_id}/suspend` | ADMIN | Tạm ngừng công bố |
-| `POST` | `/admin/kb-v2/revisions/{revision_id}/unsuspend` | ADMIN | Khôi phục công bố |
+| `POST` | `/admin/legal-kb/revisions/upload` | ADMIN | Tải DOCX vào luồng duyệt |
+| `GET` | `/admin/legal-kb/revisions` | ADMIN | Danh sách hồ sơ duyệt |
+| `GET` | `/admin/legal-kb/revisions/{revision_id}` | ADMIN | Chi tiết hồ sơ duyệt |
+| `GET` | `/admin/legal-kb/revisions/{revision_id}/source` | ADMIN | Tải file nguồn theo revision |
+| `GET` | `/admin/legal-kb/documents` | ADMIN | Danh sách văn bản đã hoặc từng công bố |
+| `GET` | `/admin/legal-kb/relation-targets` | ADMIN | Tìm văn bản đích để tạo quan hệ trên toàn bộ hồ sơ; hỗ trợ `q`, `exclude_document_id`, `limit` |
+| `GET` | `/admin/legal-kb/documents/{document_id}` | ADMIN | Chi tiết văn bản trong Kho văn bản |
+| `PATCH` | `/admin/legal-kb/documents/{document_id}` | ADMIN | Sửa metadata văn bản đã công bố |
+| `POST` | `/admin/legal-kb/documents/{document_id}/status` | ADMIN | Đổi trạng thái quản trị |
+| `POST` | `/admin/legal-kb/documents/{document_id}/replacement-revisions/upload` | ADMIN | Tạo hồ sơ thay file nguồn cho văn bản đang quản lý |
+| `POST` | `/admin/legal-kb/revisions/{revision_id}/metadata-proposals` | ADMIN | Tạo đề xuất metadata |
+| `POST` | `/admin/legal-kb/metadata-proposals/{proposal_id}/review` | ADMIN | Duyệt đề xuất metadata |
+| `POST` | `/admin/legal-kb/nodes/{node_id}/review` | ADMIN | Duyệt một mục nội dung |
+| `POST` | `/admin/legal-kb/nodes/{node_id}/reset-review` | ADMIN | Đưa mục nội dung về cần kiểm tra |
+| `POST` | `/admin/legal-kb/revisions/{revision_id}/risky-nodes/bulk-review` | ADMIN | Duyệt nhanh nhóm mục cần xem kỹ |
+| `POST` | `/admin/legal-kb/revisions/{revision_id}/relations` | ADMIN | Tạo quan hệ văn bản |
+| `POST` | `/admin/legal-kb/relations/{relation_id}/review` | ADMIN | Duyệt quan hệ |
+| `PATCH` | `/admin/legal-kb/relations/{relation_id}` | ADMIN | Sửa quan hệ |
+| `DELETE` | `/admin/legal-kb/relations/{relation_id}` | ADMIN | Loại bỏ quan hệ và ghi lịch sử xử lý |
+| `POST` | `/admin/legal-kb/summaries/{summary_id}/review` | ADMIN | Duyệt tóm tắt chuẩn |
+| `POST` | `/admin/legal-kb/revisions/{revision_id}/publish` | ADMIN | Công bố revision |
+| `POST` | `/admin/legal-kb/revisions/{revision_id}/suspend` | ADMIN | Tạm ngừng công bố |
+| `POST` | `/admin/legal-kb/revisions/{revision_id}/unsuspend` | ADMIN | Khôi phục công bố |
 
-`GET /admin/kb-v2/revisions/{revision_id}` trả thêm các trường tổng hợp phục vụ màn `Duyệt văn bản`:
+`GET /admin/legal-kb/revisions/{revision_id}` trả thêm các trường tổng hợp phục vụ màn `Duyệt văn bản`:
 
 - `pending_metadata`
 - `pending_relations`
@@ -224,26 +226,26 @@ Runtime hiện tại của `Duyệt văn bản` dùng thêm hai fallback ổn đ
 
 `relations` chứa cả quan hệ đi và quan hệ đến để hiển thị bối cảnh đầy đủ. `pending_relations` và `pending_relations_count` chỉ tính quan hệ đi ra từ văn bản của revision hiện tại; quan hệ đi vào được duyệt tại văn bản nguồn. Khi tạo quan hệ, API trả `422` nếu văn bản đích trùng văn bản nguồn và `409` nếu đã tồn tại cùng bộ nguồn, đích và loại quan hệ.
 
-`POST /admin/kb-v2/revisions/{revision_id}/publish` là thao tác idempotent. Nếu
+`POST /admin/legal-kb/revisions/{revision_id}/publish` là thao tác idempotent. Nếu
 revision đã `published`, API trả `200` cùng chi tiết hiện tại, không tạo lại
 retrieval units và không ghi thêm audit event. `409` chỉ dùng khi hồ sơ chưa đủ
 điều kiện công bố.
 
-`GET /admin/kb-v2/relation-targets` tìm theo `document_id`, số hiệu hoặc tiêu đề trực tiếp trên `kb_v2_legal_documents`, không giới hạn ở revision đã công bố. Frontend truyền `exclude_document_id` để loại văn bản đang duyệt và truy vấn lại khi người dùng nhập, thay vì chỉ lọc cục bộ một trang danh sách.
+`GET /admin/legal-kb/relation-targets` tìm theo `document_id`, số hiệu hoặc tiêu đề trực tiếp trên `legal_kb_legal_documents`, không giới hạn ở revision đã công bố. Frontend truyền `exclude_document_id` để loại văn bản đang duyệt và truy vấn lại khi người dùng nhập, thay vì chỉ lọc cục bộ một trang danh sách.
 
 `PATCH /relations/{relation_id}` đưa quan hệ về trạng thái cần xử lý trước khi duyệt lại. `DELETE /relations/{relation_id}` xóa quan hệ, ghi review event `deleted` với nguồn, đích và loại quan hệ; nếu hồ sơ nguồn còn là bản nháp thì trạng thái duyệt của hồ sơ chuyển về `in_review`.
 
 Frontend ưu tiên các trường tổng hợp này để xác định việc còn cần xử lý, mục đã kiểm tra và trạng thái sẵn sàng đưa vào kho. Không suy diễn lại toàn bộ từ danh sách node thô nếu API đã trả dữ liệu tổng hợp.
 
-`POST /admin/kb-v2/documents/{document_id}/replacement-revisions/upload` tạo revision `draft` mới trên cùng `document_id` của văn bản đang quản lý. Endpoint này không ghi đè file, node hoặc retrieval unit của revision đang công bố; public/chatbot vẫn dùng revision `published` hiện hành cho tới khi hồ sơ thay file được duyệt và publish. Metadata proposal của revision thay file chỉ được áp dụng lên document ở bước publish, không áp dụng ngay khi reviewer duyệt proposal. Khi publish revision thay file, các revision `published` hoặc `suspended` cũ cùng `document_id` chuyển sang `archived`, retrieval units cũ chuyển sang trạng thái lịch sử để không tham gia trả lời mới.
+`POST /admin/legal-kb/documents/{document_id}/replacement-revisions/upload` tạo revision `draft` mới trên cùng `document_id` của văn bản đang quản lý. Endpoint này không ghi đè file, node hoặc retrieval unit của revision đang công bố; public/chatbot vẫn dùng revision `published` hiện hành cho tới khi hồ sơ thay file được duyệt và publish. Metadata proposal của revision thay file chỉ được áp dụng lên document ở bước publish, không áp dụng ngay khi reviewer duyệt proposal. Khi publish revision thay file, các revision `published` hoặc `suspended` cũ cùng `document_id` chuyển sang `archived`, retrieval units cũ chuyển sang trạng thái lịch sử để không tham gia trả lời mới.
 
 Trong modal `Thông tin văn bản` của màn `Duyệt văn bản`, frontend áp dụng rule lưu như sau:
 
-- revision `draft`: chỉnh các field chính bằng cách tạo hoặc cập nhật metadata proposal rồi duyệt ngay proposal đó qua `POST /admin/kb-v2/revisions/{revision_id}/metadata-proposals` và `POST /admin/kb-v2/metadata-proposals/{proposal_id}/review`
-- revision đã ở trong kho (`published`, `suspended`, `archived`): lưu trực tiếp qua `PATCH /admin/kb-v2/documents/{document_id}` để giữ một nguồn sự thật theo `document_id`
+- revision `draft`: chỉnh các field chính bằng cách tạo hoặc cập nhật metadata proposal rồi duyệt ngay proposal đó qua `POST /admin/legal-kb/revisions/{revision_id}/metadata-proposals` và `POST /admin/legal-kb/metadata-proposals/{proposal_id}/review`
+- revision đã ở trong kho (`published`, `suspended`, `archived`): lưu trực tiếp qua `PATCH /admin/legal-kb/documents/{document_id}` để giữ một nguồn sự thật theo `document_id`
 - action trạng thái kho (`publish`, `suspend`, `unsuspend`) chỉ xuất hiện trong modal chỉnh sửa, không lặp lại ở accordion xem nhanh của card danh sách
 
-`GET /admin/kb-v2/revisions` hiện cũng trả đủ dữ liệu cho card hồ sơ ở màn `Duyệt văn bản`:
+`GET /admin/legal-kb/revisions` hiện cũng trả đủ dữ liệu cho card hồ sơ ở màn `Duyệt văn bản`:
 
 - `issuing_authority`
 - `effective_date`
@@ -272,7 +274,7 @@ Ngữ nghĩa thời gian của card hồ sơ:
 - nếu list hồ sơ gặp lỗi nội bộ ngoài nhóm database, API phải trả `500` với `detail.code = KB_DOCUMENT_LIST_UNAVAILABLE` và thông điệp tiếng Việt
 - nếu mở chi tiết hồ sơ gặp lỗi nội bộ ngoài nhóm database, API phải trả `500` với `detail.code = KB_REVISION_DETAIL_UNAVAILABLE` và thông điệp tiếng Việt
 
-### 6.1 `GET /admin/kb-v2/documents`
+### 6.1 `GET /admin/legal-kb/documents`
 
 - Trả danh sách văn bản đã hoặc từng công bố cho màn `Kho văn bản`.
 - Không được trả danh sách rỗng để né lỗi.
@@ -372,8 +374,8 @@ Ngữ nghĩa thời gian của card hồ sơ:
 Tài liệu này mô tả contract vận hành hiện tại. Không dùng placeholder cutover cũ và không coi dữ liệu `legal_documents`/`document_chunks` là nguồn runtime cho public/chat nữa.
 ### Ghi chú API cho form `Thông tin văn bản`
 
-- `PATCH /admin/kb-v2/revisions/{revision_id}/source` cập nhật metadata nguồn của revision, gồm `source_url`, `source_downloaded_at`, `source_note` và `source_file_name`.
-- Trong màn `Duyệt văn bản`, form `Thông tin văn bản` lưu tóm tắt chuẩn qua `POST /admin/kb-v2/summaries/{summary_id}/review`.
+- `PATCH /admin/legal-kb/revisions/{revision_id}/source` cập nhật metadata nguồn của revision, gồm `source_url`, `source_downloaded_at`, `source_note` và `source_file_name`.
+- Trong màn `Duyệt văn bản`, form `Thông tin văn bản` lưu tóm tắt chuẩn qua `POST /admin/legal-kb/summaries/{summary_id}/review`.
 - Với revision `draft`, metadata pháp lý vẫn đi qua metadata proposal; metadata nguồn đi qua endpoint revision source để không trộn dữ liệu file nguồn vào proposal pháp lý.
 
 ### 3.2 Runtime contract locked by golden eval
