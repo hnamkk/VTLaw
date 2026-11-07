@@ -108,11 +108,11 @@ async def test_list_documents_exposes_public_source_download_url(client, monkeyp
     assert item['source_download_url'] == '/api/v1/documents/10010010-0100-1001-0010-010010010019/source'
     assert item['relations'] == []
     compiled = str(session.statements[1])
-    assert 'kb_v2_legal_documents.legal_status = :legal_status_1' in compiled
+    assert 'legal_kb_legal_documents.legal_status = :legal_status_1' in compiled
 
 
 @pytest.mark.asyncio
-async def test_list_documents_switches_to_kb_v2_when_public_flag_enabled(client, monkeypatch):
+async def test_list_documents_switches_to_legal_kb_when_public_flag_enabled(client, monkeypatch):
     session = _SequenceSession(
         _ListResult(scalar_value=1),
         _ListResult(
@@ -248,7 +248,7 @@ async def test_source_endpoint_serves_approved_pdf_inline(client, tmp_path, monk
 
 
 @pytest.mark.asyncio
-async def test_source_endpoint_rejects_path_outside_kb_v2_storage(client, tmp_path, monkeypatch):
+async def test_source_endpoint_rejects_path_outside_legal_kb_storage(client, tmp_path, monkeypatch):
     storage_dir = tmp_path / 'storage'
     storage_dir.mkdir()
     outside_file = tmp_path / 'outside.pdf'
@@ -327,13 +327,13 @@ async def test_source_endpoint_requires_published_document_before_serving_source
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_public_detail_returns_warning_and_summary_link(client, monkeypatch):
+async def test_legal_kb_public_detail_returns_warning_and_summary_link(client, monkeypatch):
     async def fake_get_public_document(_session, document_id: str):
         assert document_id == 'doc-v2'
         return (
             SimpleNamespace(
                 document_id='doc-v2',
-                title='Van ban KB v2',
+                title='Van ban kho văn bản',
                 document_number='12/2026/TT-BGTVT',
                 document_type='THONG_TU',
                 issuing_authority='Bo GTVT',
@@ -345,7 +345,7 @@ async def test_kb_v2_public_detail_returns_warning_and_summary_link(client, monk
             SimpleNamespace(original_filename='fresh.docx'),
         )
 
-    monkeypatch.setattr('src.api.v1.documents._get_kb_v2_public_document', fake_get_public_document)
+    monkeypatch.setattr('src.api.v1.documents._get_legal_kb_public_document', fake_get_public_document)
 
     response = await client.get('/api/v1/documents/doc-v2')
 
@@ -358,7 +358,7 @@ async def test_kb_v2_public_detail_returns_warning_and_summary_link(client, monk
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_source_endpoint_serves_local_source_with_warning(client, tmp_path, monkeypatch):
+async def test_legal_kb_source_endpoint_serves_local_source_with_warning(client, tmp_path, monkeypatch):
     source_file = tmp_path / 'fresh.docx'
     source_file.write_bytes(b'docx')
     monkeypatch.setattr('src.api.v1.documents.settings.KB_LOCAL_STORAGE_PATH', str(tmp_path))
@@ -374,7 +374,7 @@ async def test_kb_v2_source_endpoint_serves_local_source_with_warning(client, tm
             ),
         )
 
-    monkeypatch.setattr('src.api.v1.documents._get_kb_v2_public_document', fake_get_public_document)
+    monkeypatch.setattr('src.api.v1.documents._get_legal_kb_public_document', fake_get_public_document)
 
     response = await client.get('/api/v1/documents/doc-v2/source')
 

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.v1.admin_assets import router as admin_assets_router
-from src.api.v1.admin_kb_v2 import router as admin_kb_v2_router
+from src.api.v1.admin_legal_kb import router as admin_legal_kb_router
 from src.api.v1.admin_quality import router as admin_quality_router
 from src.api.v1.admin_users import router as admin_users_router
 from src.api.v1.auth import router as auth_router
@@ -77,7 +77,7 @@ app.include_router(auth_router, prefix="/api/v1")
 app.include_router(chat_v1_router, prefix="/api/v1")
 app.include_router(docs_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
-app.include_router(admin_kb_v2_router, prefix="/api/v1")
+app.include_router(admin_legal_kb_router, prefix="/api/v1")
 app.include_router(admin_assets_router, prefix="/api/v1")
 app.include_router(admin_quality_router, prefix="/api/v1")
 app.include_router(admin_users_router, prefix="/api/v1")

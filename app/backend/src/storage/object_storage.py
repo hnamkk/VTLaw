@@ -38,7 +38,7 @@ def object_key_from_uri(uri: str) -> str:
     return parsed.path.lstrip("/")
 
 
-def build_kb_v2_object_key(
+def build_legal_kb_object_key(
     *,
     kind: str,
     document_id: str,
@@ -50,18 +50,18 @@ def build_kb_v2_object_key(
     ext = (extension or "").lstrip(".")
     if kind == "source":
         if not sha256:
-            raise ObjectStorageError("KB v2 source objects require sha256.")
+            raise ObjectStorageError("kho văn bản source objects require sha256.")
         suffix = f".{ext}" if ext else ""
-        return f"kb-v2/sources/{document_id}/{revision_id}/{sha256}/source{suffix}"
+        return f"legal-kb/sources/{document_id}/{revision_id}/{sha256}/source{suffix}"
     if kind == "asset":
         if not asset_id:
-            raise ObjectStorageError("KB v2 asset objects require asset_id.")
+            raise ObjectStorageError("kho văn bản asset objects require asset_id.")
         suffix = f".{ext}" if ext else ""
-        return f"kb-v2/assets/{document_id}/{revision_id}/{asset_id}/original{suffix}"
+        return f"legal-kb/assets/{document_id}/{revision_id}/{asset_id}/original{suffix}"
     if kind == "rendition":
         suffix = f".{ext}" if ext else ""
-        return f"kb-v2/renditions/{document_id}/{revision_id}/document{suffix}"
-    raise ObjectStorageError(f"Unsupported KB v2 object kind: {kind}")
+        return f"legal-kb/renditions/{document_id}/{revision_id}/document{suffix}"
+    raise ObjectStorageError(f"Unsupported kho văn bản object kind: {kind}")
 
 
 class S3ObjectStorage:

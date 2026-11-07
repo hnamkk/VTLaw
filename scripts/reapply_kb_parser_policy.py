@@ -16,18 +16,18 @@ if str(BACKEND_ROOT) not in sys.path:
 from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
-from src.kb_v2.ingestion import _kb_v2_local_root
-from src.kb_v2.parser import build_canonical_nodes, parse_docx_into_artifacts
-from src.kb_v2.retrieval_units import (
+from src.legal_kb.ingestion import _legal_kb_local_root
+from src.legal_kb.parser import build_canonical_nodes, parse_docx_into_artifacts
+from src.legal_kb.retrieval_units import (
     RISKY_NODE_TYPES_REQUIRING_ANSWERABILITY_DECISION,
     build_retrieval_units,
 )
-from src.models.kb_v2 import (
-    KbV2CanonicalNode,
-    KbV2DocumentRevision,
-    KbV2ReviewEvent,
-    KbV2SourceAsset,
-    KbV2RetrievalUnit,
+from src.models.legal_kb import (
+    LegalKbNode,
+    LegalKbRevision,
+    LegalKbReviewEvent,
+    LegalKbSourceAsset,
+    LegalKbRetrievalUnit,
 )
 from src.db.session import async_session_factory
 
@@ -55,7 +55,7 @@ def _resolve_local_source_path(storage_uri: str) -> Path | None:
     return Path(storage_uri)
 
 
-def _apply_parser_policy(existing: KbV2CanonicalNode, projected: KbV2CanonicalNode) -> tuple[dict, str]:
+def _apply_parser_policy(existing: LegalKbNode, projected: LegalKbNode) -> tuple[dict, str]:
     existing_structured = dict(existing.structured_content or {})
     projected_structured = dict(projected.structured_content or {})
 
@@ -88,20 +88,20 @@ def _apply_parser_policy(existing: KbV2CanonicalNode, projected: KbV2CanonicalNo
     return projected_structured, review_status
 
 
-async def _load_revisions(*, revision_ids: set[str] | None) -> list[KbV2DocumentRevision]:
+async def _load_revisions(*, revision_ids: set[str] | None) -> list[LegalKbRevision]:
     async with async_session_factory() as session:
         stmt = (
-            select(KbV2DocumentRevision)
+            select(LegalKbRevision)
             .options(
-                selectinload(KbV2DocumentRevision.document),
-                selectinload(KbV2DocumentRevision.source_assets),
-                selectinload(KbV2DocumentRevision.canonical_nodes),
-                selectinload(KbV2DocumentRevision.retrieval_units),
+                selectinload(LegalKbRevision.document),
+                selectinload(LegalKbRevision.source_assets),
+                selectinload(LegalKbRevision.canonical_nodes),
+                selectinload(LegalKbRevision.retrieval_units),
             )
-            .order_by(KbV2DocumentRevision.created_at)
+            .order_by(LegalKbRevision.created_at)
         )
         if revision_ids:
-            stmt = stmt.where(KbV2DocumentRevision.revision_id.in_(revision_ids))
+            stmt = stmt.where(LegalKbRevision.revision_id.in_(revision_ids))
         result = await session.execute(stmt)
         return list(result.scalars().unique().all())
 
@@ -113,13 +113,13 @@ async def reapply_policy(*, revision_ids: set[str] | None, dry_run: bool) -> lis
     async with async_session_factory() as session:
         for revision in revisions:
             revision = await session.get(
-                KbV2DocumentRevision,
+                LegalKbRevision,
                 revision.revision_id,
                 options=[
-                    selectinload(KbV2DocumentRevision.document),
-                    selectinload(KbV2DocumentRevision.source_assets),
-                    selectinload(KbV2DocumentRevision.canonical_nodes),
-                    selectinload(KbV2DocumentRevision.retrieval_units),
+                    selectinload(LegalKbRevision.document),
+                    selectinload(LegalKbRevision.source_assets),
+                    selectinload(LegalKbRevision.canonical_nodes),
+                    selectinload(LegalKbRevision.retrieval_units),
                 ],
             )
             if revision is None:
@@ -162,7 +162,7 @@ async def reapply_policy(*, revision_ids: set[str] | None, dry_run: bool) -> lis
                 )
                 continue
             if not source_path.is_absolute():
-                source_path = (_kb_v2_local_root() / source_path).resolve()
+                source_path = (_legal_kb_local_root() / source_path).resolve()
             if not source_path.exists():
                 reports.append(
                     RevisionUpdateReport(
@@ -261,7 +261,7 @@ async def reapply_policy(*, revision_ids: set[str] | None, dry_run: bool) -> lis
                 ):
                     generated = await build_retrieval_units(document=revision.document, revision=revision)
                     await session.execute(
-                        delete(KbV2RetrievalUnit).where(KbV2RetrievalUnit.revision_id == revision_id)
+                        delete(LegalKbRetrievalUnit).where(LegalKbRetrievalUnit.revision_id == revision_id)
                     )
                     for unit in generated.units:
                         session.add(unit)
@@ -269,7 +269,7 @@ async def reapply_policy(*, revision_ids: set[str] | None, dry_run: bool) -> lis
 
                 if not dry_run and changed_nodes > 0:
                     session.add(
-                        KbV2ReviewEvent(
+                        LegalKbReviewEvent(
                             review_event_id=str(uuid4()),
                             document_id=document_id,
                             revision_id=revision_id,
@@ -278,7 +278,7 @@ async def reapply_policy(*, revision_ids: set[str] | None, dry_run: bool) -> lis
                             decision="updated",
                             actor_user_id=None,
                             details={
-                                "action": "reapply_kb_v2_parser_policy",
+                                "action": "reapply_legal_kb_parser_policy",
                                 "changed_nodes": changed_nodes,
                                 "rebuilt_retrieval_units": rebuilt_retrieval_units,
                             },

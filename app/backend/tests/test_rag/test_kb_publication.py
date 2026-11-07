@@ -6,30 +6,30 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from src.kb_v2.publication import (
+from src.legal_kb.publication import (
     NO_ANSWERABLE_NODE_BLOCKER,
     collect_publish_blockers,
     publish_revision,
     suspend_revision,
 )
-from src.kb_v2.retrieval_units import (
+from src.legal_kb.retrieval_units import (
     GeneratedRetrievalUnits,
     build_retrieval_units,
     citation_label_for_node,
 )
-from src.kb_v2.review import (
+from src.legal_kb.review import (
     normalize_legacy_revision_review_state,
     review_metadata_proposal,
     review_summary,
 )
-from src.models.kb_v2 import (
-    KbV2CanonicalNode,
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2MetadataProposal,
-    KbV2RetrievalUnit,
-    KbV2SourceAsset,
-    KbV2StandardSummary,
+from src.models.legal_kb import (
+    LegalKbNode,
+    LegalKbRevision,
+    LegalKbDocument,
+    LegalKbMetadataProposal,
+    LegalKbRetrievalUnit,
+    LegalKbSourceAsset,
+    LegalKbSummary,
 )
 
 
@@ -64,7 +64,7 @@ class _ReviewSummarySession(_Session):
         self.summary = summary
 
     async def get(self, model, entity_id):
-        if model is KbV2StandardSummary and entity_id == self.summary.summary_id:
+        if model is LegalKbSummary and entity_id == self.summary.summary_id:
             return self.summary
         return None
 
@@ -75,13 +75,13 @@ class _ReviewMetadataSession(_Session):
         self.proposal = proposal
 
     async def get(self, model, entity_id):
-        if model is KbV2MetadataProposal and entity_id == self.proposal.proposal_id:
+        if model is LegalKbMetadataProposal and entity_id == self.proposal.proposal_id:
             return self.proposal
         return None
 
 
-def _proposal(*, field_name: str, proposed_value: str, review_status: str = "approved") -> KbV2MetadataProposal:
-    return KbV2MetadataProposal(
+def _proposal(*, field_name: str, proposed_value: str, review_status: str = "approved") -> LegalKbMetadataProposal:
+    return LegalKbMetadataProposal(
         proposal_id=f"proposal-{field_name}-{proposed_value}",
         document_id="doc-1",
         revision_id="rev-1",
@@ -93,7 +93,7 @@ def _proposal(*, field_name: str, proposed_value: str, review_status: str = "app
 
 
 def _base_bundle():
-    document = KbV2LegalDocument(
+    document = LegalKbDocument(
         document_id="doc-1",
         title="Thong tu thu nghiem",
         document_type="THONG_TU",
@@ -103,7 +103,7 @@ def _base_bundle():
         legal_status="unknown",
         metadata_json={"document_role": "original"},
     )
-    revision = KbV2DocumentRevision(
+    revision = LegalKbRevision(
         revision_id="rev-1",
         document_id="doc-1",
         revision_number=1,
@@ -112,18 +112,18 @@ def _base_bundle():
         publication_status="draft",
         uploaded_at=datetime.now(tz=UTC),
     )
-    source_asset = KbV2SourceAsset(
+    source_asset = LegalKbSourceAsset(
         asset_id="asset-1",
         document_id="doc-1",
         revision_id="rev-1",
         asset_role="source",
-        storage_uri="file:///kb-v2/doc-1/rev-1/source.docx",
+        storage_uri="file:///legal-kb/doc-1/rev-1/source.docx",
         original_filename="source.docx",
         mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         sha256="abc123",
         metadata_json={"storage_backend": "local"},
     )
-    node = KbV2CanonicalNode(
+    node = LegalKbNode(
         node_id="node-1",
         revision_id="rev-1",
         node_type="article",
@@ -132,7 +132,7 @@ def _base_bundle():
         order_index=1,
         review_status="approved",
     )
-    summary = KbV2StandardSummary(
+    summary = LegalKbSummary(
         summary_id="summary-1",
         document_id="doc-1",
         revision_id="rev-1",
@@ -185,7 +185,7 @@ def test_collect_publish_blockers_flags_conflict_and_amendment_relation_gap():
 def test_collect_publish_blockers_flags_orphan_clause_locator():
     bundle = _base_bundle()
     bundle.revision.canonical_nodes = [
-        KbV2CanonicalNode(
+        LegalKbNode(
             node_id="orphan-clause",
             revision_id="rev-1",
             node_type="clause",
@@ -233,7 +233,7 @@ async def test_review_metadata_for_replacement_draft_does_not_mutate_published_d
         assert revision_id == bundle.revision.revision_id
         return bundle
 
-    monkeypatch.setattr("src.kb_v2.review.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.review.load_revision_bundle", fake_load_revision_bundle)
 
     reviewed = await review_metadata_proposal(
         session,
@@ -250,7 +250,7 @@ async def test_review_metadata_for_replacement_draft_does_not_mutate_published_d
 
 def test_collect_publish_blockers_requires_answerability_decision_for_risky_nodes():
     bundle = _base_bundle()
-    table = KbV2CanonicalNode(
+    table = LegalKbNode(
         node_id="node-table",
         revision_id="rev-1",
         node_type="table",
@@ -277,7 +277,7 @@ def test_normalize_legacy_revision_review_state_auto_approves_upload_metadata_an
         _proposal(field_name="effective_date", proposed_value="2026-08-01", review_status="needs_review"),
         _proposal(field_name="document_role", proposed_value="original", review_status="needs_review"),
     ]
-    safe_article = KbV2CanonicalNode(
+    safe_article = LegalKbNode(
         node_id="node-safe",
         revision_id="rev-1",
         node_type="article",
@@ -286,7 +286,7 @@ def test_normalize_legacy_revision_review_state_auto_approves_upload_metadata_an
         order_index=2,
         review_status="needs_review",
     )
-    risky_table = KbV2CanonicalNode(
+    risky_table = LegalKbNode(
         node_id="node-risky",
         revision_id="rev-1",
         node_type="table",
@@ -310,7 +310,7 @@ def test_normalize_legacy_revision_review_state_auto_approves_upload_metadata_an
 
 @pytest.mark.asyncio
 async def test_build_retrieval_units_embeds_only_answerable_nodes(monkeypatch):
-    document = KbV2LegalDocument(
+    document = LegalKbDocument(
         document_id="doc-1",
         title="Thong tu thu nghiem",
         document_type="THONG_TU",
@@ -319,7 +319,7 @@ async def test_build_retrieval_units_embeds_only_answerable_nodes(monkeypatch):
         legal_status="active",
         metadata_json={},
     )
-    revision = KbV2DocumentRevision(
+    revision = LegalKbRevision(
         revision_id="rev-1",
         document_id="doc-1",
         revision_number=1,
@@ -328,7 +328,7 @@ async def test_build_retrieval_units_embeds_only_answerable_nodes(monkeypatch):
         publication_status="draft",
         uploaded_at=datetime.now(tz=UTC),
     )
-    article = KbV2CanonicalNode(
+    article = LegalKbNode(
         node_id="node-1",
         revision_id="rev-1",
         node_type="article",
@@ -337,7 +337,7 @@ async def test_build_retrieval_units_embeds_only_answerable_nodes(monkeypatch):
         order_index=1,
         review_status="approved",
     )
-    image = KbV2CanonicalNode(
+    image = LegalKbNode(
         node_id="node-2",
         revision_id="rev-1",
         parent_id="node-1",
@@ -352,7 +352,7 @@ async def test_build_retrieval_units_embeds_only_answerable_nodes(monkeypatch):
     async def fake_embed_texts(texts: list[str]) -> list[list[float]]:
         return [[float(len(text))] for text in texts]
 
-    monkeypatch.setattr("src.kb_v2.retrieval_units.embed_texts", fake_embed_texts)
+    monkeypatch.setattr("src.legal_kb.retrieval_units.embed_texts", fake_embed_texts)
 
     generated = await build_retrieval_units(document=document, revision=revision)
 
@@ -366,7 +366,7 @@ async def test_build_retrieval_units_embeds_only_answerable_nodes(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_build_retrieval_units_embeds_reviewed_answerable_table(monkeypatch):
-    document = KbV2LegalDocument(
+    document = LegalKbDocument(
         document_id="doc-1",
         title="Thong tu thu nghiem",
         document_type="THONG_TU",
@@ -375,7 +375,7 @@ async def test_build_retrieval_units_embeds_reviewed_answerable_table(monkeypatc
         legal_status="active",
         metadata_json={},
     )
-    revision = KbV2DocumentRevision(
+    revision = LegalKbRevision(
         revision_id="rev-1",
         document_id="doc-1",
         revision_number=1,
@@ -384,7 +384,7 @@ async def test_build_retrieval_units_embeds_reviewed_answerable_table(monkeypatc
         publication_status="draft",
         uploaded_at=datetime.now(tz=UTC),
     )
-    table = KbV2CanonicalNode(
+    table = LegalKbNode(
         node_id="node-table",
         revision_id="rev-1",
         node_type="table",
@@ -399,7 +399,7 @@ async def test_build_retrieval_units_embeds_reviewed_answerable_table(monkeypatc
     async def fake_embed_texts(texts: list[str]) -> list[list[float]]:
         return [[float(len(text))] for text in texts]
 
-    monkeypatch.setattr("src.kb_v2.retrieval_units.embed_texts", fake_embed_texts)
+    monkeypatch.setattr("src.legal_kb.retrieval_units.embed_texts", fake_embed_texts)
 
     generated = await build_retrieval_units(document=document, revision=revision)
 
@@ -410,7 +410,7 @@ async def test_build_retrieval_units_embeds_reviewed_answerable_table(monkeypatc
 
 @pytest.mark.asyncio
 async def test_build_retrieval_units_uses_unique_content_hash_per_node(monkeypatch):
-    document = KbV2LegalDocument(
+    document = LegalKbDocument(
         document_id="doc-1",
         title="Luat thu nghiem",
         document_type="LUAT",
@@ -419,7 +419,7 @@ async def test_build_retrieval_units_uses_unique_content_hash_per_node(monkeypat
         legal_status="active",
         metadata_json={},
     )
-    revision = KbV2DocumentRevision(
+    revision = LegalKbRevision(
         revision_id="rev-1",
         document_id="doc-1",
         revision_number=1,
@@ -428,7 +428,7 @@ async def test_build_retrieval_units_uses_unique_content_hash_per_node(monkeypat
         publication_status="draft",
         uploaded_at=datetime.now(tz=UTC),
     )
-    clause_a = KbV2CanonicalNode(
+    clause_a = LegalKbNode(
         node_id="node-a",
         revision_id="rev-1",
         node_type="clause",
@@ -437,7 +437,7 @@ async def test_build_retrieval_units_uses_unique_content_hash_per_node(monkeypat
         order_index=1,
         review_status="approved",
     )
-    clause_b = KbV2CanonicalNode(
+    clause_b = LegalKbNode(
         node_id="node-b",
         revision_id="rev-1",
         node_type="clause",
@@ -451,7 +451,7 @@ async def test_build_retrieval_units_uses_unique_content_hash_per_node(monkeypat
     async def fake_embed_texts(texts: list[str]) -> list[list[float]]:
         return [[float(len(text))] for text in texts]
 
-    monkeypatch.setattr("src.kb_v2.retrieval_units.embed_texts", fake_embed_texts)
+    monkeypatch.setattr("src.legal_kb.retrieval_units.embed_texts", fake_embed_texts)
 
     generated = await build_retrieval_units(document=document, revision=revision)
 
@@ -461,7 +461,7 @@ async def test_build_retrieval_units_uses_unique_content_hash_per_node(monkeypat
 
 @pytest.mark.asyncio
 async def test_build_retrieval_units_uses_structured_locator_over_stale_parent(monkeypatch):
-    document = KbV2LegalDocument(
+    document = LegalKbDocument(
         document_id="doc-1",
         title="Nghi dinh thu nghiem",
         document_type="NGHI_DINH",
@@ -470,7 +470,7 @@ async def test_build_retrieval_units_uses_structured_locator_over_stale_parent(m
         legal_status="active",
         metadata_json={},
     )
-    revision = KbV2DocumentRevision(
+    revision = LegalKbRevision(
         revision_id="rev-1",
         document_id="doc-1",
         revision_number=1,
@@ -479,7 +479,7 @@ async def test_build_retrieval_units_uses_structured_locator_over_stale_parent(m
         publication_status="draft",
         uploaded_at=datetime.now(tz=UTC),
     )
-    stale_parent = KbV2CanonicalNode(
+    stale_parent = LegalKbNode(
         node_id="node-article-49",
         revision_id="rev-1",
         node_type="article",
@@ -489,7 +489,7 @@ async def test_build_retrieval_units_uses_structured_locator_over_stale_parent(m
         review_status="approved",
         structured_content={"chapter_num": 3, "article_num": 49, "chunk_type": "dieu"},
     )
-    clause_50 = KbV2CanonicalNode(
+    clause_50 = LegalKbNode(
         node_id="node-clause-50",
         revision_id="rev-1",
         parent_id="node-article-49",
@@ -505,7 +505,7 @@ async def test_build_retrieval_units_uses_structured_locator_over_stale_parent(m
             "chunk_type": "khoan",
         },
     )
-    point_51 = KbV2CanonicalNode(
+    point_51 = LegalKbNode(
         node_id="node-point-51",
         revision_id="rev-1",
         parent_id="node-article-49",
@@ -527,7 +527,7 @@ async def test_build_retrieval_units_uses_structured_locator_over_stale_parent(m
     async def fake_embed_texts(texts: list[str]) -> list[list[float]]:
         return [[float(len(text))] for text in texts]
 
-    monkeypatch.setattr("src.kb_v2.retrieval_units.embed_texts", fake_embed_texts)
+    monkeypatch.setattr("src.legal_kb.retrieval_units.embed_texts", fake_embed_texts)
 
     generated = await build_retrieval_units(document=document, revision=revision)
 
@@ -542,7 +542,7 @@ async def test_build_retrieval_units_uses_structured_locator_over_stale_parent(m
 
 
 def test_citation_label_for_node_uses_structured_locator_without_parent_map():
-    node = KbV2CanonicalNode(
+    node = LegalKbNode(
         node_id="node-1",
         revision_id="rev-1",
         node_type="point",
@@ -562,10 +562,10 @@ def test_citation_label_for_node_uses_structured_locator_without_parent_map():
 
 
 def test_citation_label_for_node_fits_database_length_for_long_fallback_chain():
-    nodes: list[KbV2CanonicalNode] = []
+    nodes: list[LegalKbNode] = []
     parent_id = None
     for index in range(10):
-        node = KbV2CanonicalNode(
+        node = LegalKbNode(
             node_id=f"node-{index}",
             revision_id="rev-1",
             parent_id=parent_id,
@@ -587,9 +587,9 @@ def test_citation_label_for_node_fits_database_length_for_long_fallback_chain():
 
 
 def test_rebuild_citation_audit_detects_legacy_mismatched_units():
-    from scripts.rebuild_kb_v2_citations import _audit_revision
+    from scripts.rebuild_kb_citations import _audit_revision
 
-    revision = KbV2DocumentRevision(
+    revision = LegalKbRevision(
         revision_id="rev-1",
         document_id="doc-1",
         revision_number=1,
@@ -598,7 +598,7 @@ def test_rebuild_citation_audit_detects_legacy_mismatched_units():
         publication_status="published",
         uploaded_at=datetime.now(tz=UTC),
     )
-    node = KbV2CanonicalNode(
+    node = LegalKbNode(
         node_id="node-50",
         revision_id="rev-1",
         node_type="clause",
@@ -608,7 +608,7 @@ def test_rebuild_citation_audit_detects_legacy_mismatched_units():
         review_status="approved",
         structured_content={"chapter_num": 3, "article_num": 50, "clause_num": 1},
     )
-    unit = KbV2RetrievalUnit(
+    unit = LegalKbRetrievalUnit(
         retrieval_unit_id="unit-1",
         canonical_node_id="node-50",
         document_id="doc-1",
@@ -632,7 +632,7 @@ def test_rebuild_citation_audit_detects_legacy_mismatched_units():
 
 @pytest.mark.asyncio
 async def test_build_retrieval_units_keeps_review_only_nodes_out_of_answerable(monkeypatch):
-    document = KbV2LegalDocument(
+    document = LegalKbDocument(
         document_id="doc-1",
         title="Luat thu nghiem",
         document_type="LUAT",
@@ -641,7 +641,7 @@ async def test_build_retrieval_units_keeps_review_only_nodes_out_of_answerable(m
         legal_status="active",
         metadata_json={},
     )
-    revision = KbV2DocumentRevision(
+    revision = LegalKbRevision(
         revision_id="rev-1",
         document_id="doc-1",
         revision_number=1,
@@ -650,7 +650,7 @@ async def test_build_retrieval_units_keeps_review_only_nodes_out_of_answerable(m
         publication_status="draft",
         uploaded_at=datetime.now(tz=UTC),
     )
-    review_only_table = KbV2CanonicalNode(
+    review_only_table = LegalKbNode(
         node_id="node-header",
         revision_id="rev-1",
         node_type="table",
@@ -660,7 +660,7 @@ async def test_build_retrieval_units_keeps_review_only_nodes_out_of_answerable(m
         review_status="approved",
         structured_content={"review_only": True, "review_only_role": "national_header", "answerable": False},
     )
-    article = KbV2CanonicalNode(
+    article = LegalKbNode(
         node_id="node-article",
         revision_id="rev-1",
         node_type="article",
@@ -674,7 +674,7 @@ async def test_build_retrieval_units_keeps_review_only_nodes_out_of_answerable(m
     async def fake_embed_texts(texts: list[str]) -> list[list[float]]:
         return [[float(len(text))] for text in texts]
 
-    monkeypatch.setattr("src.kb_v2.retrieval_units.embed_texts", fake_embed_texts)
+    monkeypatch.setattr("src.legal_kb.retrieval_units.embed_texts", fake_embed_texts)
 
     generated = await build_retrieval_units(document=document, revision=revision)
 
@@ -687,7 +687,7 @@ async def test_build_retrieval_units_keeps_review_only_nodes_out_of_answerable(m
 
 def test_collect_publish_blockers_skips_answerability_for_review_only_tables():
     bundle = _base_bundle()
-    header_table = KbV2CanonicalNode(
+    header_table = LegalKbNode(
         node_id="node-header",
         revision_id="rev-1",
         node_type="table",
@@ -707,7 +707,7 @@ def test_collect_publish_blockers_skips_answerability_for_review_only_tables():
 def test_collect_publish_blockers_requires_at_least_one_answerable_node():
     bundle = _base_bundle()
     bundle.revision.canonical_nodes = [
-        KbV2CanonicalNode(
+        LegalKbNode(
             node_id="node-review-only-table",
             revision_id="rev-1",
             node_type="table",
@@ -728,7 +728,7 @@ def test_collect_publish_blockers_requires_at_least_one_answerable_node():
 async def test_publish_revision_blocks_before_embedding_when_no_answerable_nodes(monkeypatch):
     bundle = _base_bundle()
     bundle.revision.canonical_nodes = [
-        KbV2CanonicalNode(
+        LegalKbNode(
             node_id="node-review-only-table",
             revision_id="rev-1",
             node_type="table",
@@ -749,8 +749,8 @@ async def test_publish_revision_blocks_before_embedding_when_no_answerable_nodes
     async def fail_build_retrieval_units(*, document, revision):
         raise AssertionError("publish should stop at publish blockers before building retrieval units")
 
-    monkeypatch.setattr("src.kb_v2.publication.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.kb_v2.publication.build_retrieval_units", fail_build_retrieval_units)
+    monkeypatch.setattr("src.legal_kb.publication.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.publication.build_retrieval_units", fail_build_retrieval_units)
 
     with pytest.raises(HTTPException) as exc_info:
         await publish_revision(session, revision_id="rev-1", actor_user_id="admin-1")
@@ -763,7 +763,7 @@ async def test_publish_revision_blocks_before_embedding_when_no_answerable_nodes
 async def test_publish_revision_marks_revision_and_persists_retrieval_units(monkeypatch):
     bundle = _base_bundle()
     session = _Session()
-    unit = KbV2RetrievalUnit(
+    unit = LegalKbRetrievalUnit(
         retrieval_unit_id="unit-1",
         canonical_node_id="node-1",
         document_id="doc-1",
@@ -773,8 +773,8 @@ async def test_publish_revision_marks_revision_and_persists_retrieval_units(monk
         citation_label="Dieu 1",
         content_hash="hash-1",
         embedding_model="text-embedding-3-small",
-        embedding_version="kb_v2_v1",
-        index_version="kb_v2_v1",
+        embedding_version="legal_kb_v1",
+        index_version="legal_kb_v1",
     )
 
     async def fake_load_revision_bundle(_session, revision_id: str, **_kwargs):
@@ -786,8 +786,8 @@ async def test_publish_revision_marks_revision_and_persists_retrieval_units(monk
         assert revision.revision_id == "rev-1"
         return GeneratedRetrievalUnits(units=[unit], answerable_count=1)
 
-    monkeypatch.setattr("src.kb_v2.publication.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.kb_v2.publication.build_retrieval_units", fake_build_retrieval_units)
+    monkeypatch.setattr("src.legal_kb.publication.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.publication.build_retrieval_units", fake_build_retrieval_units)
 
     revision, blockers = await publish_revision(session, revision_id="rev-1", actor_user_id="admin-1")
 
@@ -800,7 +800,7 @@ async def test_publish_revision_marks_revision_and_persists_retrieval_units(monk
 async def test_publish_revision_rolls_back_when_database_commit_fails(monkeypatch):
     bundle = _base_bundle()
     session = _FailingCommitSession()
-    unit = KbV2RetrievalUnit(
+    unit = LegalKbRetrievalUnit(
         retrieval_unit_id="unit-1",
         canonical_node_id="node-1",
         document_id="doc-1",
@@ -818,8 +818,8 @@ async def test_publish_revision_rolls_back_when_database_commit_fails(monkeypatc
     async def fake_build_retrieval_units(*, document, revision):
         return GeneratedRetrievalUnits(units=[unit], answerable_count=1)
 
-    monkeypatch.setattr("src.kb_v2.publication.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.kb_v2.publication.build_retrieval_units", fake_build_retrieval_units)
+    monkeypatch.setattr("src.legal_kb.publication.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.publication.build_retrieval_units", fake_build_retrieval_units)
 
     with pytest.raises(RuntimeError, match="commit failed"):
         await publish_revision(session, revision_id="rev-1", actor_user_id="admin-1")
@@ -841,8 +841,8 @@ async def test_publish_revision_is_idempotent_when_revision_is_already_published
     async def fail_build_retrieval_units(*, document, revision):
         raise AssertionError("an idempotent publish must not rebuild retrieval units")
 
-    monkeypatch.setattr("src.kb_v2.publication.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.kb_v2.publication.build_retrieval_units", fail_build_retrieval_units)
+    monkeypatch.setattr("src.legal_kb.publication.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.publication.build_retrieval_units", fail_build_retrieval_units)
 
     revision, blockers = await publish_revision(session, revision_id="rev-1", actor_user_id="admin-1")
 
@@ -858,7 +858,7 @@ async def test_publish_revision_blocks_published_revision_with_orphan_locator(mo
     bundle.revision.publication_status = "published"
     bundle.revision.review_status = "approved"
     bundle.revision.canonical_nodes = [
-        KbV2CanonicalNode(
+        LegalKbNode(
             node_id="orphan-clause",
             revision_id="rev-1",
             node_type="clause",
@@ -878,8 +878,8 @@ async def test_publish_revision_blocks_published_revision_with_orphan_locator(mo
     async def fail_build_retrieval_units(*, document, revision):
         raise AssertionError("published revision with orphan locator must stop before rebuild")
 
-    monkeypatch.setattr("src.kb_v2.publication.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.kb_v2.publication.build_retrieval_units", fail_build_retrieval_units)
+    monkeypatch.setattr("src.legal_kb.publication.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.publication.build_retrieval_units", fail_build_retrieval_units)
 
     with pytest.raises(HTTPException) as exc_info:
         await publish_revision(session, revision_id="rev-1", actor_user_id="admin-1")
@@ -903,8 +903,8 @@ async def test_publish_revision_normalizes_published_revision_review_status(monk
     async def fail_build_retrieval_units(*, document, revision):
         raise AssertionError("normalizing an already-published revision must not rebuild retrieval units")
 
-    monkeypatch.setattr("src.kb_v2.publication.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.kb_v2.publication.build_retrieval_units", fail_build_retrieval_units)
+    monkeypatch.setattr("src.legal_kb.publication.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.publication.build_retrieval_units", fail_build_retrieval_units)
 
     revision, blockers = await publish_revision(session, revision_id="rev-1", actor_user_id="admin-1")
 
@@ -924,7 +924,7 @@ async def test_publish_replacement_revision_archives_previous_revision(monkeypat
     for proposal in bundle.revision.metadata_proposals:
         if proposal.field_name == "title":
             proposal.proposed_value = "New replacement title"
-    old_unit = KbV2RetrievalUnit(
+    old_unit = LegalKbRetrievalUnit(
         retrieval_unit_id="unit-old",
         canonical_node_id="node-old",
         document_id="doc-1",
@@ -934,7 +934,7 @@ async def test_publish_replacement_revision_archives_previous_revision(monkeypat
         citation_label="Dieu 1",
         content_hash="hash-old",
     )
-    old_revision = KbV2DocumentRevision(
+    old_revision = LegalKbRevision(
         revision_id="rev-1",
         document_id="doc-1",
         revision_number=1,
@@ -946,7 +946,7 @@ async def test_publish_replacement_revision_archives_previous_revision(monkeypat
     old_revision.retrieval_units = [old_unit]
     bundle.document.revisions = [old_revision, bundle.revision]
     session = _Session()
-    new_unit = KbV2RetrievalUnit(
+    new_unit = LegalKbRetrievalUnit(
         retrieval_unit_id="unit-new",
         canonical_node_id="node-1",
         document_id="doc-1",
@@ -967,8 +967,8 @@ async def test_publish_replacement_revision_archives_previous_revision(monkeypat
         assert revision.revision_id == "rev-2"
         return GeneratedRetrievalUnits(units=[new_unit], answerable_count=1)
 
-    monkeypatch.setattr("src.kb_v2.publication.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.kb_v2.publication.build_retrieval_units", fake_build_retrieval_units)
+    monkeypatch.setattr("src.legal_kb.publication.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.publication.build_retrieval_units", fake_build_retrieval_units)
 
     revision, blockers = await publish_revision(session, revision_id="rev-2", actor_user_id="admin-1")
 
@@ -998,8 +998,8 @@ async def test_publish_replacement_revision_does_not_apply_metadata_when_generat
         assert document.title == "New replacement title"
         return GeneratedRetrievalUnits(units=[], answerable_count=0)
 
-    monkeypatch.setattr("src.kb_v2.publication.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.kb_v2.publication.build_retrieval_units", fake_build_retrieval_units)
+    monkeypatch.setattr("src.legal_kb.publication.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.publication.build_retrieval_units", fake_build_retrieval_units)
 
     with pytest.raises(HTTPException) as exc_info:
         await publish_revision(session, revision_id="rev-2", actor_user_id="admin-1")
@@ -1020,7 +1020,7 @@ async def test_review_summary_keeps_published_revision_approved(monkeypatch):
         assert revision_id == "rev-1"
         return bundle
 
-    monkeypatch.setattr("src.kb_v2.review.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.review.load_revision_bundle", fake_load_revision_bundle)
 
     summary = await review_summary(
         session,
@@ -1047,7 +1047,7 @@ async def test_review_summary_keeps_draft_revision_in_review(monkeypatch):
         assert revision_id == "rev-1"
         return bundle
 
-    monkeypatch.setattr("src.kb_v2.review.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.review.load_revision_bundle", fake_load_revision_bundle)
 
     await review_summary(
         session,
@@ -1064,7 +1064,7 @@ async def test_review_summary_keeps_draft_revision_in_review(monkeypatch):
 @pytest.mark.asyncio
 async def test_suspend_revision_marks_units_suspended(monkeypatch):
     bundle = _base_bundle()
-    unit = KbV2RetrievalUnit(
+    unit = LegalKbRetrievalUnit(
         retrieval_unit_id="unit-1",
         canonical_node_id="node-1",
         document_id="doc-1",
@@ -1081,7 +1081,7 @@ async def test_suspend_revision_marks_units_suspended(monkeypatch):
         assert revision_id == "rev-1"
         return bundle
 
-    monkeypatch.setattr("src.kb_v2.publication.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.legal_kb.publication.load_revision_bundle", fake_load_revision_bundle)
 
     revision = await suspend_revision(
         session,

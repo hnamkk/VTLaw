@@ -5,13 +5,13 @@ import unicodedata
 from datetime import UTC, date, datetime
 from uuid import uuid4
 
-from src.kb_v2.metadata import normalize_document_role, normalize_document_type
-from src.models.kb_v2 import (
-    KbV2CanonicalNode,
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2MetadataProposal,
-    KbV2StandardSummary,
+from src.legal_kb.metadata import normalize_document_role, normalize_document_type
+from src.models.legal_kb import (
+    LegalKbNode,
+    LegalKbRevision,
+    LegalKbDocument,
+    LegalKbMetadataProposal,
+    LegalKbSummary,
 )
 
 _METADATA_FIELDS = (
@@ -37,19 +37,19 @@ _BOILERPLATE_CHAPTER_PATTERNS = (
 
 def seed_initial_metadata_proposals(
     *,
-    document: KbV2LegalDocument,
-    revision: KbV2DocumentRevision,
-) -> list[KbV2MetadataProposal]:
+    document: LegalKbDocument,
+    revision: LegalKbRevision,
+) -> list[LegalKbMetadataProposal]:
     values: dict[str, str] = {}
     for field_name in _METADATA_FIELDS:
         raw_value = _proposal_value_for_field(document=document, field_name=field_name)
         if raw_value:
             values[field_name] = raw_value
 
-    proposals: list[KbV2MetadataProposal] = []
+    proposals: list[LegalKbMetadataProposal] = []
     for field_name, proposed_value in values.items():
         proposals.append(
-            KbV2MetadataProposal(
+            LegalKbMetadataProposal(
                 proposal_id=str(uuid4()),
                 document_id=document.document_id,
                 revision_id=revision.revision_id,
@@ -68,15 +68,15 @@ def seed_initial_metadata_proposals(
 
 def build_summary_proposal(
     *,
-    document: KbV2LegalDocument,
-    revision: KbV2DocumentRevision,
-    canonical_nodes: list[KbV2CanonicalNode],
-) -> KbV2StandardSummary | None:
+    document: LegalKbDocument,
+    revision: LegalKbRevision,
+    canonical_nodes: list[LegalKbNode],
+) -> LegalKbSummary | None:
     content = _build_standard_summary_draft(document=document, canonical_nodes=canonical_nodes)
     if not content:
         return None
 
-    return KbV2StandardSummary(
+    return LegalKbSummary(
         summary_id=str(uuid4()),
         document_id=document.document_id,
         revision_id=revision.revision_id,
@@ -106,7 +106,7 @@ def infer_document_role(*, title: str | None, document_type: str | None, source_
     return "primary"
 
 
-def _proposal_value_for_field(*, document: KbV2LegalDocument, field_name: str) -> str | None:
+def _proposal_value_for_field(*, document: LegalKbDocument, field_name: str) -> str | None:
     if field_name == "document_role":
         uploaded_role = document.metadata_json.get("document_role")
         if isinstance(uploaded_role, str) and uploaded_role.strip():
@@ -131,8 +131,8 @@ def _proposal_value_for_field(*, document: KbV2LegalDocument, field_name: str) -
 
 def _build_standard_summary_draft(
     *,
-    document: KbV2LegalDocument,
-    canonical_nodes: list[KbV2CanonicalNode],
+    document: LegalKbDocument,
+    canonical_nodes: list[LegalKbNode],
 ) -> str:
     scope_text = _detect_scope_text(canonical_nodes)
     main_topics = _main_topic_summary(canonical_nodes)
@@ -170,7 +170,7 @@ def _build_standard_summary_draft(
     return "\n".join(lines).strip()
 
 
-def _legal_info_line(document: KbV2LegalDocument) -> str:
+def _legal_info_line(document: LegalKbDocument) -> str:
     parts = [
         document.title or "Văn bản chưa rõ tên",
         f"số {document.document_number}" if document.document_number else None,
@@ -182,7 +182,7 @@ def _legal_info_line(document: KbV2LegalDocument) -> str:
     return sentence.strip().rstrip(".") + "."
 
 
-def _detect_scope_text(canonical_nodes: list[KbV2CanonicalNode]) -> str | None:
+def _detect_scope_text(canonical_nodes: list[LegalKbNode]) -> str | None:
     candidates = [
         node
         for node in canonical_nodes
@@ -199,7 +199,7 @@ def _detect_scope_text(canonical_nodes: list[KbV2CanonicalNode]) -> str | None:
     return None
 
 
-def _main_topic_summary(canonical_nodes: list[KbV2CanonicalNode]) -> str:
+def _main_topic_summary(canonical_nodes: list[LegalKbNode]) -> str:
     chapters = [
         _chapter_topic(_clean_text(node.text))
         for node in canonical_nodes
@@ -229,7 +229,7 @@ def _main_topic_summary(canonical_nodes: list[KbV2CanonicalNode]) -> str:
     return ""
 
 
-def _review_only_notes(canonical_nodes: list[KbV2CanonicalNode]) -> str:
+def _review_only_notes(canonical_nodes: list[LegalKbNode]) -> str:
     roles: list[str] = []
     for node in canonical_nodes:
         role = (node.structured_content or {}).get("review_only_role")

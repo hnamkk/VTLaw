@@ -81,6 +81,9 @@ def test_pipeline_metadata_explains_runtime_versions_and_stages():
         "status_filter": "active",
         "candidate_count": 24,
         "context_count": 2,
+        "follow_up_used": False,
+        "follow_up_confidence": None,
+        "follow_up_reason": None,
     }
     assert metadata["ranking"]["top_score"] == 0.87
     assert metadata["verification"]["citation_count"] == 1

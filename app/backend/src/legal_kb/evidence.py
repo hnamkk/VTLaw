@@ -8,20 +8,20 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.models.kb_v2 import (
-    KbV2AmendmentOperation,
-    KbV2CanonicalProvision,
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2ProvisionVersion,
+from src.models.legal_kb import (
+    LegalKbAmendmentOperation,
+    LegalKbProvision,
+    LegalKbRevision,
+    LegalKbDocument,
+    LegalKbProvisionVersion,
 )
 
 
 @dataclass(frozen=True)
 class EvidenceBundle:
     query_date: date
-    provision_versions: tuple[KbV2ProvisionVersion, ...]
-    amendment_operations: tuple[KbV2AmendmentOperation, ...]
+    provision_versions: tuple[LegalKbProvisionVersion, ...]
+    amendment_operations: tuple[LegalKbAmendmentOperation, ...]
     conflict_notices: tuple[str, ...] = ()
 
     @property
@@ -70,55 +70,55 @@ async def _load_effective_provision_versions(
     *,
     query_date: date,
     document_ids: tuple[str, ...] | None,
-) -> list[KbV2ProvisionVersion]:
+) -> list[LegalKbProvisionVersion]:
     stmt = (
-        select(KbV2ProvisionVersion)
-        .join(KbV2DocumentRevision, KbV2DocumentRevision.revision_id == KbV2ProvisionVersion.revision_id)
+        select(LegalKbProvisionVersion)
+        .join(LegalKbRevision, LegalKbRevision.revision_id == LegalKbProvisionVersion.revision_id)
         .join(
-            KbV2CanonicalProvision,
-            KbV2CanonicalProvision.canonical_provision_id
-            == KbV2ProvisionVersion.canonical_provision_id,
+            LegalKbProvision,
+            LegalKbProvision.canonical_provision_id
+            == LegalKbProvisionVersion.canonical_provision_id,
         )
-        .join(KbV2LegalDocument, KbV2LegalDocument.document_id == KbV2CanonicalProvision.document_id)
+        .join(LegalKbDocument, LegalKbDocument.document_id == LegalKbProvision.document_id)
         .where(
-            KbV2DocumentRevision.publication_status == "published",
-            KbV2DocumentRevision.review_status == "approved",
-            KbV2LegalDocument.legal_status != "suspended",
-            KbV2ProvisionVersion.answerable_status.notin_(("suspended", "not_answerable")),
-            or_(KbV2ProvisionVersion.effective_from.is_(None), KbV2ProvisionVersion.effective_from <= query_date),
-            or_(KbV2ProvisionVersion.effective_to.is_(None), KbV2ProvisionVersion.effective_to > query_date),
+            LegalKbRevision.publication_status == "published",
+            LegalKbRevision.review_status == "approved",
+            LegalKbDocument.legal_status != "suspended",
+            LegalKbProvisionVersion.answerable_status.notin_(("suspended", "not_answerable")),
+            or_(LegalKbProvisionVersion.effective_from.is_(None), LegalKbProvisionVersion.effective_from <= query_date),
+            or_(LegalKbProvisionVersion.effective_to.is_(None), LegalKbProvisionVersion.effective_to > query_date),
         )
         .options(
-            selectinload(KbV2ProvisionVersion.canonical_provision).selectinload(
-                KbV2CanonicalProvision.document
+            selectinload(LegalKbProvisionVersion.canonical_provision).selectinload(
+                LegalKbProvision.document
             ),
-            selectinload(KbV2ProvisionVersion.provision_sources),
+            selectinload(LegalKbProvisionVersion.provision_sources),
         )
-        .order_by(KbV2CanonicalProvision.document_id, KbV2CanonicalProvision.provision_key)
+        .order_by(LegalKbProvision.document_id, LegalKbProvision.provision_key)
     )
     if document_ids:
-        stmt = stmt.where(KbV2CanonicalProvision.document_id.in_(document_ids))
+        stmt = stmt.where(LegalKbProvision.document_id.in_(document_ids))
     return list((await session.execute(stmt)).scalars().all())
 
 
 async def _load_amendment_operations(
     session: AsyncSession,
     *,
-    versions: list[KbV2ProvisionVersion],
-) -> list[KbV2AmendmentOperation]:
+    versions: list[LegalKbProvisionVersion],
+) -> list[LegalKbAmendmentOperation]:
     version_ids = [version.provision_version_id for version in versions]
     if not version_ids:
         return []
     stmt = (
-        select(KbV2AmendmentOperation)
-        .where(KbV2AmendmentOperation.provision_version_id.in_(version_ids))
-        .order_by(KbV2AmendmentOperation.provision_version_id, KbV2AmendmentOperation.operation_order)
+        select(LegalKbAmendmentOperation)
+        .where(LegalKbAmendmentOperation.provision_version_id.in_(version_ids))
+        .order_by(LegalKbAmendmentOperation.provision_version_id, LegalKbAmendmentOperation.operation_order)
     )
     return list((await session.execute(stmt)).scalars().all())
 
 
-def _conflict_notices(versions: list[KbV2ProvisionVersion], *, query_date: date) -> list[str]:
-    grouped: dict[str, list[KbV2ProvisionVersion]] = defaultdict(list)
+def _conflict_notices(versions: list[LegalKbProvisionVersion], *, query_date: date) -> list[str]:
+    grouped: dict[str, list[LegalKbProvisionVersion]] = defaultdict(list)
     for version in versions:
         grouped[version.canonical_provision_id].append(version)
 

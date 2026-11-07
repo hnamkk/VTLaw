@@ -4,7 +4,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException, UploadFile
+from fastapi import FastAPI, HTTPException, UploadFile
+from httpx import ASGITransport, AsyncClient
 
 from src.api.v1.admin_kb import (
     SavedUpload,
@@ -18,16 +19,26 @@ from src.api.v1.admin_kb import (
     _structure_summary,
     approve_kb_queue_item,
     reject_kb_queue_item,
+    router,
     save_kb_queue_draft,
 )
 from src.api.v1.schemas import KbQueueApproveRequest, KbQueueDraftRequest, KbQueueRejectRequest
 from src.auth.dependencies import require_admin
 from src.db.session import get_session
-from src.main import app
 from src.models.document_asset import DocumentAsset
 from src.models.document_chunk import DocumentChunk
 from src.models.kb_update_queue import KbUpdateQueue
 from src.models.legal_document import LegalDocument
+
+# Legacy unit contracts run on an isolated app; production only mounts kho văn bản.
+app = FastAPI()
+app.include_router(router, prefix="/api/v1")
+
+
+@pytest.fixture
+async def client():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as value:
+        yield value
 
 
 @pytest.fixture(autouse=True)

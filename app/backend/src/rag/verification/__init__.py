@@ -135,6 +135,12 @@ def _find_best_chunk(
         return 0
 
     candidates = [chunk for chunk in context_chunks if match_tier(chunk) > 0]
+    explicit_numbers = set(re.findall(r"\b\d{1,4}/(?:\d{4}/)?[a-z][a-z0-9/ ]*", normalized_claim))
+    if explicit_numbers:
+        # Match the actual document identity, not just a reused article number.
+        candidates = [chunk for chunk in candidates if document_mention(chunk) > 0]
+    elif len({chunk.doc_id for chunk in candidates}) > 1:
+        return None
     if not candidates:
         return None
     return max(
@@ -224,6 +230,7 @@ def _claim_segment(answer: str, ref: dict) -> str:
         phrase in f" {normalized_segment} "
         for phrase in (" can cu ", " can cu phap ly ", " cu the theo ", " theo ")
     )
+    source_only = source_only or (segment.startswith("[") and "|" in segment)
     if left > 0 and source_only:
         prefix = answer[:left].rstrip(" \n\r\t.;")
         previous_boundaries = list(_CLAIM_BOUNDARY_PATTERN.finditer(prefix))
@@ -344,8 +351,7 @@ def verify_citations(
             )
             continue
 
-        if chunk.chunk_id in seen_chunks:
-            continue
+        # Verify every claim, including repeated references to the same source.
         seen_chunks.add(chunk.chunk_id)
         seen_doc_ids.add(chunk.doc_id)
 
@@ -406,8 +412,14 @@ def verify_citations(
                 asset_ids=chunk.asset_ids,
                 source_url=chunk.source_url,
                 text_snippet=chunk.text_snippet[:200],
-                verification_status=VerificationStatus.verified,
-                confidence=0.99,
+                verification_status=(
+                    VerificationStatus.verified
+                    if chunk.status == "active"
+                    and _numeric_claim_grounded(answer, chunk.full_text or chunk.text_snippet)
+                    and _snippet_grounded(answer, chunk.full_text or chunk.text_snippet) >= 0.5
+                    else VerificationStatus.unverified
+                ),
+                confidence=0.8,
             )
         )
         seen_chunks.add(chunk.chunk_id)
@@ -428,23 +440,15 @@ def citations_from_retrieval_units(
     legal locators; every field comes from the retrieved unit metadata.
     """
     citations: list[Citation] = []
-    seen_doc_ids: set[str] = set()
     seen_chunk_ids: set[str] = set()
-    ordered_chunks = sorted(
-        context_chunks,
-        key=lambda chunk: (
-            0 if chunk.article_num is not None else 1,
-            -(chunk.rerank_score or chunk.hybrid_score or 0.0),
-        ),
-    )
+    ordered_chunks = context_chunks
     for chunk in ordered_chunks:
         if len(citations) >= max_citations:
             break
         if chunk.status != "active" or not chunk.doc_id or not chunk.chunk_id:
             continue
-        if chunk.doc_id in seen_doc_ids or chunk.chunk_id in seen_chunk_ids:
+        if chunk.chunk_id in seen_chunk_ids:
             continue
-        seen_doc_ids.add(chunk.doc_id)
         seen_chunk_ids.add(chunk.chunk_id)
         citations.append(
             Citation(

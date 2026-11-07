@@ -1,4 +1,4 @@
-"""KB v2 ingestion workflow for the first DOCX vertical slice."""
+"""kho văn bản ingestion workflow for the first DOCX vertical slice."""
 
 from __future__ import annotations
 
@@ -14,24 +14,24 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
-from src.kb_v2.metadata import normalize_document_role, normalize_document_type
-from src.kb_v2.parser import build_canonical_nodes, parse_docx_into_artifacts
-from src.kb_v2.proposals import build_summary_proposal, seed_initial_metadata_proposals
-from src.kb_v2.retrieval_units import RISKY_NODE_TYPES_REQUIRING_ANSWERABILITY_DECISION
-from src.models.kb_v2 import (
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2ReviewEvent,
-    KbV2SourceAsset,
+from src.legal_kb.metadata import normalize_document_role, normalize_document_type
+from src.legal_kb.parser import build_canonical_nodes, parse_docx_into_artifacts
+from src.legal_kb.proposals import build_summary_proposal, seed_initial_metadata_proposals
+from src.legal_kb.retrieval_units import RISKY_NODE_TYPES_REQUIRING_ANSWERABILITY_DECISION
+from src.models.legal_kb import (
+    LegalKbRevision,
+    LegalKbDocument,
+    LegalKbReviewEvent,
+    LegalKbSourceAsset,
 )
-from src.storage.object_storage import build_kb_v2_object_key, get_object_storage
+from src.storage.object_storage import build_legal_kb_object_key, get_object_storage
 
 _UPLOAD_CHUNK_SIZE = 1024 * 1024
 _DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 @dataclass(frozen=True)
-class SavedKbV2Upload:
+class SavedLegalKbUpload:
     local_path: Path
     storage_uri: str
     checksum_sha256: str
@@ -41,16 +41,16 @@ class SavedKbV2Upload:
 
 
 @dataclass(frozen=True)
-class KbV2IngestionResult:
-    document: KbV2LegalDocument
-    revision: KbV2DocumentRevision
-    source_asset: KbV2SourceAsset
+class LegalKbIngestionResult:
+    document: LegalKbDocument
+    revision: LegalKbRevision
+    source_asset: LegalKbSourceAsset
     canonical_nodes: list
     parser_warnings: list[str]
     parser_confidence: float
 
 
-async def ingest_kb_v2_docx(
+async def ingest_legal_kb_docx(
     session: AsyncSession,
     *,
     file: UploadFile,
@@ -66,8 +66,8 @@ async def ingest_kb_v2_docx(
     effective_date: date | None = None,
     expiry_date: date | None = None,
     uploaded_by: str | None = None,
-    existing_document: KbV2LegalDocument | None = None,
-) -> KbV2IngestionResult:
+    existing_document: LegalKbDocument | None = None,
+) -> LegalKbIngestionResult:
     metadata_json = {"source_note": source_note.strip(), "source_url": source_url.strip()}
     if document_role:
         normalized_role = normalize_document_role(document_role)
@@ -76,7 +76,7 @@ async def ingest_kb_v2_docx(
     normalized_document_type = normalize_document_type(document_type)
 
     if existing_document is None:
-        document = KbV2LegalDocument(
+        document = LegalKbDocument(
             document_id=str(uuid4()),
             title=title.strip(),
             document_number=document_number,
@@ -93,7 +93,7 @@ async def ingest_kb_v2_docx(
         upload_mode = "new_document"
     else:
         document = existing_document
-        proposal_document = KbV2LegalDocument(
+        proposal_document = LegalKbDocument(
             document_id=document.document_id,
             title=title.strip(),
             document_number=document_number or document.document_number,
@@ -108,14 +108,14 @@ async def ingest_kb_v2_docx(
         revision_number = max((item.revision_number for item in document.revisions), default=0) + 1
         upload_mode = "replacement"
 
-    revision = KbV2DocumentRevision(
+    revision = LegalKbRevision(
         revision_id=str(uuid4()),
         document_id=document.document_id,
         revision_number=revision_number,
         ingestion_status="uploaded",
         review_status="needs_review",
         publication_status="draft",
-        parser_version="kb-v2-p1",
+        parser_version="legal-kb-p1",
         source_url=source_url.strip(),
         source_downloaded_at=source_downloaded_at,
         source_note=source_note.strip(),
@@ -126,9 +126,9 @@ async def ingest_kb_v2_docx(
     saved_upload = await _save_source_docx(file, document_id=document.document_id, revision_id=revision.revision_id)
 
     duplicate = await session.scalar(
-        select(KbV2SourceAsset).where(
-            KbV2SourceAsset.asset_role == "source",
-            KbV2SourceAsset.sha256 == saved_upload.checksum_sha256,
+        select(LegalKbSourceAsset).where(
+            LegalKbSourceAsset.asset_role == "source",
+            LegalKbSourceAsset.sha256 == saved_upload.checksum_sha256,
         )
     )
     if duplicate is not None:
@@ -137,7 +137,7 @@ async def ingest_kb_v2_docx(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "code": "KB_DUPLICATE_SOURCE",
-                "message": "Tệp DOCX này đã được upload trước đó trong KB v2. Hãy mở revision đang có để tiếp tục review.",
+                "message": "Tệp DOCX này đã được upload trước đó trong kho văn bản. Hãy mở revision đang có để tiếp tục review.",
                 "source_asset_id": duplicate.asset_id,
                 "document_id": duplicate.document_id,
                 "revision_id": duplicate.revision_id,
@@ -145,7 +145,7 @@ async def ingest_kb_v2_docx(
             },
         )
 
-    source_asset = KbV2SourceAsset(
+    source_asset = LegalKbSourceAsset(
         asset_id=str(uuid4()),
         document_id=document.document_id,
         revision_id=revision.revision_id,
@@ -206,7 +206,7 @@ async def ingest_kb_v2_docx(
     if summary_proposal is not None:
         session.add(summary_proposal)
     session.add(
-        KbV2ReviewEvent(
+        LegalKbReviewEvent(
             review_event_id=str(uuid4()),
             document_id=document.document_id,
             revision_id=revision.revision_id,
@@ -226,7 +226,7 @@ async def ingest_kb_v2_docx(
     )
     await session.commit()
 
-    return KbV2IngestionResult(
+    return LegalKbIngestionResult(
         document=document,
         revision=revision,
         source_asset=source_asset,
@@ -236,7 +236,7 @@ async def ingest_kb_v2_docx(
     )
 
 
-def _current_published_revision_id(document: KbV2LegalDocument) -> str | None:
+def _current_published_revision_id(document: LegalKbDocument) -> str | None:
     published = [
         revision
         for revision in document.revisions
@@ -252,16 +252,16 @@ async def _save_source_docx(
     *,
     document_id: str,
     revision_id: str,
-) -> SavedKbV2Upload:
+) -> SavedLegalKbUpload:
     safe_name = Path(file.filename or "source.docx").name
     if Path(safe_name).suffix.lower() != ".docx":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "UNSUPPORTED_FILE_TYPE", "message": "KB v2 hiện chỉ nhận file DOCX."},
+            detail={"code": "UNSUPPORTED_FILE_TYPE", "message": "kho văn bản hiện chỉ nhận file DOCX."},
         )
 
     max_size_bytes = settings.MAX_UPLOAD_FILE_SIZE_MB * 1024 * 1024
-    local_root = _kb_v2_local_root()
+    local_root = _legal_kb_local_root()
     tmp_dir = local_root / "_tmp"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     tmp_path = tmp_dir / f"{uuid4().hex}-{safe_name}"
@@ -292,7 +292,7 @@ async def _save_source_docx(
         raise
 
     checksum = digest.hexdigest()
-    final_key = build_kb_v2_object_key(
+    final_key = build_legal_kb_object_key(
         kind="source",
         document_id=document_id,
         revision_id=revision_id,
@@ -314,7 +314,7 @@ async def _save_source_docx(
             metadata=metadata,
         )
 
-    return SavedKbV2Upload(
+    return SavedLegalKbUpload(
         local_path=final_local_path,
         storage_uri=storage_uri,
         checksum_sha256=checksum,
@@ -324,7 +324,7 @@ async def _save_source_docx(
     )
 
 
-def _kb_v2_local_root() -> Path:
+def _legal_kb_local_root() -> Path:
     configured = Path(settings.kb_local_storage_path)
     if configured.is_absolute():
         return configured

@@ -1,6 +1,6 @@
 """Legacy retrieval over ``LegalDocument`` / ``document_chunks``.
 
-The current chat/public runtime must use ``hybrid_v2`` instead. This module is
+The current chat/public runtime must use ``hybrid_legal`` instead. This module is
 kept only for legacy maintenance, migration comparison, and targeted tests.
 """
 

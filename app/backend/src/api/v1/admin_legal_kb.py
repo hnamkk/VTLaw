@@ -15,50 +15,50 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from src.api.v1.schemas import (
-    KbV2CanonicalNodeOut,
-    KbV2DocumentOut,
-    KbV2DocumentRelationOut,
-    KbV2MetadataProposalCreateRequest,
-    KbV2MetadataProposalOut,
-    KbV2NodeResetReviewRequest,
-    KbV2NodeReviewRequest,
-    KbV2ProposalReviewRequest,
-    KbV2PublishedDocumentListItemOut,
-    KbV2PublishedDocumentListResponse,
-    KbV2PublishedDocumentStatusRequest,
-    KbV2PublishedDocumentUpdateRequest,
-    KbV2RelationCreateRequest,
-    KbV2RelationReviewRequest,
-    KbV2RelationTargetItemOut,
-    KbV2RelationTargetListResponse,
-    KbV2RelationUpdateRequest,
-    KbV2RetrievalUnitOut,
-    KbV2ReviewEventOut,
-    KbV2RevisionDetailResponse,
-    KbV2RevisionListItemOut,
-    KbV2RevisionListResponse,
-    KbV2RevisionOut,
-    KbV2RevisionSourceUpdateRequest,
-    KbV2RiskyNodeBulkReviewRequest,
-    KbV2SourceAssetOut,
-    KbV2StandardSummaryOut,
-    KbV2SummaryReviewRequest,
-    KbV2SuspendRequest,
-    KbV2UploadResponse,
+    LegalKbNodeOut,
+    LegalKbDocumentOut,
+    LegalKbRelationOut,
+    LegalKbMetadataProposalCreateRequest,
+    LegalKbMetadataProposalOut,
+    LegalKbNodeResetReviewRequest,
+    LegalKbNodeReviewRequest,
+    LegalKbProposalReviewRequest,
+    LegalKbPublishedDocumentListItemOut,
+    LegalKbPublishedDocumentListResponse,
+    LegalKbPublishedDocumentStatusRequest,
+    LegalKbPublishedDocumentUpdateRequest,
+    LegalKbRelationCreateRequest,
+    LegalKbRelationReviewRequest,
+    LegalKbRelationTargetItemOut,
+    LegalKbRelationTargetListResponse,
+    LegalKbRelationUpdateRequest,
+    LegalKbRetrievalUnitOut,
+    LegalKbReviewEventOut,
+    LegalKbRevisionDetailResponse,
+    LegalKbRevisionListItemOut,
+    LegalKbRevisionListResponse,
+    LegalKbRevisionOut,
+    LegalKbRevisionSourceUpdateRequest,
+    LegalKbRiskyNodeBulkReviewRequest,
+    LegalKbSourceAssetOut,
+    LegalKbSummaryOut,
+    LegalKbSummaryReviewRequest,
+    LegalKbSuspendRequest,
+    LegalKbUploadResponse,
 )
 from src.auth.dependencies import require_admin
 from src.core.config import settings
 from src.db.session import get_session
-from src.kb_v2.ingestion import KbV2IngestionResult, ingest_kb_v2_docx
-from src.kb_v2.metadata import normalize_document_role, normalize_document_type
-from src.kb_v2.publication import (
+from src.legal_kb.ingestion import LegalKbIngestionResult, ingest_legal_kb_docx
+from src.legal_kb.metadata import normalize_document_role, normalize_document_type
+from src.legal_kb.publication import (
     _published_legal_status,
     collect_publish_blockers,
     publish_revision,
     suspend_revision,
     unsuspend_revision,
 )
-from src.kb_v2.review import (
+from src.legal_kb.review import (
     bulk_review_risky_nodes,
     create_metadata_proposal,
     create_relation_proposal,
@@ -73,28 +73,28 @@ from src.kb_v2.review import (
     review_summary,
     update_relation_proposal,
 )
-from src.models.kb_v2 import (
-    KbV2DocumentRelation,
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2MetadataProposal,
-    KbV2ReviewEvent,
-    KbV2SourceAsset,
-    KbV2StandardSummary,
+from src.models.legal_kb import (
+    LegalKbRelation,
+    LegalKbRevision,
+    LegalKbDocument,
+    LegalKbMetadataProposal,
+    LegalKbReviewEvent,
+    LegalKbSourceAsset,
+    LegalKbSummary,
 )
 from src.models.user import User
 from src.storage.object_storage import get_object_storage, is_object_uri
 
-router = APIRouter(prefix="/admin/kb-v2", tags=["admin-kb-v2"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/admin/legal-kb", tags=["admin-legal-kb"], dependencies=[Depends(require_admin)])
 logger = logging.getLogger(__name__)
 
 
-def _ensure_kb_v2_enabled() -> None:
+def _ensure_legal_kb_enabled() -> None:
     """Compat shim after KB cutover: admin KB routes are always available."""
     return None
 
 
-def _kb_v2_runtime_http_error(exc: SQLAlchemyError) -> HTTPException:
+def _legal_kb_runtime_http_error(exc: SQLAlchemyError) -> HTTPException:
     raw_message = str(getattr(exc, "orig", exc))
     normalized = raw_message.lower()
     if isinstance(exc, OperationalError) or "connection refused" in normalized:
@@ -118,7 +118,7 @@ def _kb_v2_runtime_http_error(exc: SQLAlchemyError) -> HTTPException:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 "code": "KB_DATABASE_ERROR",
-                "message": "Database trả lỗi khi xử lý KB v2. Kiểm tra log backend để xem chi tiết.",
+                "message": "Database trả lỗi khi xử lý kho văn bản. Kiểm tra log backend để xem chi tiết.",
             },
         )
     return HTTPException(
@@ -130,7 +130,7 @@ def _kb_v2_runtime_http_error(exc: SQLAlchemyError) -> HTTPException:
     )
 
 
-def _kb_v2_list_runtime_http_error() -> HTTPException:
+def _legal_kb_list_runtime_http_error() -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail={
@@ -139,7 +139,7 @@ def _kb_v2_list_runtime_http_error() -> HTTPException:
         },
     )
 
-def _kb_v2_revision_list_http_error(exc: SQLAlchemyError | None = None) -> HTTPException:
+def _legal_kb_revision_list_http_error(exc: SQLAlchemyError | None = None) -> HTTPException:
     if exc is None:
         return HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -184,7 +184,7 @@ def _kb_v2_revision_list_http_error(exc: SQLAlchemyError | None = None) -> HTTPE
     )
 
 
-def _kb_v2_revision_detail_http_error(exc: SQLAlchemyError | None = None) -> HTTPException:
+def _legal_kb_revision_detail_http_error(exc: SQLAlchemyError | None = None) -> HTTPException:
     if exc is None:
         return HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -229,8 +229,8 @@ def _kb_v2_revision_detail_http_error(exc: SQLAlchemyError | None = None) -> HTT
     )
 
 
-@router.post("/revisions/upload", response_model=KbV2UploadResponse, status_code=status.HTTP_201_CREATED)
-async def upload_kb_v2_revision(
+@router.post("/revisions/upload", response_model=LegalKbUploadResponse, status_code=status.HTTP_201_CREATED)
+async def upload_legal_kb_revision(
     file: UploadFile = File(...),
     title: str = Form(..., min_length=3, max_length=500),
     source_url: str = Form(..., min_length=5, max_length=1000),
@@ -246,9 +246,9 @@ async def upload_kb_v2_revision(
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     try:
-        result = await ingest_kb_v2_docx(
+        result = await ingest_legal_kb_docx(
             db_session,
             file=file,
             title=title,
@@ -265,17 +265,17 @@ async def upload_kb_v2_revision(
             uploaded_by=current_user.user_id,
         )
     except SQLAlchemyError as exc:
-        logger.exception("KB v2 upload failed with a database error")
-        raise _kb_v2_runtime_http_error(exc) from exc
+        logger.exception("kho văn bản upload failed with a database error")
+        raise _legal_kb_runtime_http_error(exc) from exc
     return _serialize_upload_response(result)
 
 
 @router.post(
     "/documents/{document_id}/replacement-revisions/upload",
-    response_model=KbV2UploadResponse,
+    response_model=LegalKbUploadResponse,
     status_code=status.HTTP_201_CREATED,
 )
-async def upload_kb_v2_replacement_revision(
+async def upload_legal_kb_replacement_revision(
     document_id: str,
     file: UploadFile = File(...),
     title: str = Form(..., min_length=3, max_length=500),
@@ -292,11 +292,11 @@ async def upload_kb_v2_replacement_revision(
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     document = await db_session.scalar(
-        select(KbV2LegalDocument)
-        .where(KbV2LegalDocument.document_id == document_id)
-        .options(selectinload(KbV2LegalDocument.revisions))
+        select(LegalKbDocument)
+        .where(LegalKbDocument.document_id == document_id)
+        .options(selectinload(LegalKbDocument.revisions))
     )
     if document is None:
         raise HTTPException(
@@ -313,7 +313,7 @@ async def upload_kb_v2_replacement_revision(
             },
         )
     try:
-        result = await ingest_kb_v2_docx(
+        result = await ingest_legal_kb_docx(
             db_session,
             file=file,
             title=title,
@@ -331,52 +331,52 @@ async def upload_kb_v2_replacement_revision(
             existing_document=document,
         )
     except SQLAlchemyError as exc:
-        logger.exception("KB v2 replacement upload failed with a database error")
-        raise _kb_v2_runtime_http_error(exc) from exc
+        logger.exception("kho văn bản replacement upload failed with a database error")
+        raise _legal_kb_runtime_http_error(exc) from exc
     return _serialize_upload_response(result)
 
 
-@router.get("/revisions", response_model=KbV2RevisionListResponse)
-async def list_kb_v2_revisions(
+@router.get("/revisions", response_model=LegalKbRevisionListResponse)
+async def list_legal_kb_revisions(
     q: str | None = None,
     publication_status: str | None = None,
     page: int = 1,
     page_size: int = 20,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     try:
         query = (
-            select(KbV2DocumentRevision, KbV2SourceAsset.original_filename)
-            .join(KbV2DocumentRevision.document)
-            .outerjoin(KbV2DocumentRevision.source_asset)
+            select(LegalKbRevision, LegalKbSourceAsset.original_filename)
+            .join(LegalKbRevision.document)
+            .outerjoin(LegalKbRevision.source_asset)
             .options(
-                selectinload(KbV2DocumentRevision.document).selectinload(KbV2LegalDocument.outgoing_relations),
-                selectinload(KbV2DocumentRevision.document).selectinload(KbV2LegalDocument.incoming_relations),
-                selectinload(KbV2DocumentRevision.source_asset),
-                selectinload(KbV2DocumentRevision.source_assets),
-                selectinload(KbV2DocumentRevision.metadata_proposals),
-                selectinload(KbV2DocumentRevision.standard_summaries),
-                selectinload(KbV2DocumentRevision.canonical_nodes),
-                selectinload(KbV2DocumentRevision.review_events),
+                selectinload(LegalKbRevision.document).selectinload(LegalKbDocument.outgoing_relations),
+                selectinload(LegalKbRevision.document).selectinload(LegalKbDocument.incoming_relations),
+                selectinload(LegalKbRevision.source_asset),
+                selectinload(LegalKbRevision.source_assets),
+                selectinload(LegalKbRevision.metadata_proposals),
+                selectinload(LegalKbRevision.standard_summaries),
+                selectinload(LegalKbRevision.canonical_nodes),
+                selectinload(LegalKbRevision.review_events),
             )
         )
         if q:
             term = f"%{q.strip()}%"
             query = query.where(
                 or_(
-                    KbV2LegalDocument.title.ilike(term),
-                    KbV2LegalDocument.document_number.ilike(term),
+                    LegalKbDocument.title.ilike(term),
+                    LegalKbDocument.document_number.ilike(term),
                 )
             )
         if publication_status:
-            query = query.where(KbV2DocumentRevision.publication_status == publication_status.strip())
+            query = query.where(LegalKbRevision.publication_status == publication_status.strip())
 
         count_result = await db_session.execute(select(func.count()).select_from(query.subquery()))
         total = count_result.scalar() or 0
         rows = (
             await db_session.execute(
-                query.order_by(KbV2DocumentRevision.uploaded_at.desc()).offset((page - 1) * page_size).limit(page_size)
+                query.order_by(LegalKbRevision.uploaded_at.desc()).offset((page - 1) * page_size).limit(page_size)
             )
         ).all()
         items = [
@@ -384,14 +384,14 @@ async def list_kb_v2_revisions(
             for revision, source_file_name in rows
         ]
     except SQLAlchemyError as exc:
-        logger.exception("KB v2 revision listing failed with a database error")
-        raise _kb_v2_revision_list_http_error(exc) from exc
+        logger.exception("kho văn bản revision listing failed with a database error")
+        raise _legal_kb_revision_list_http_error(exc) from exc
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("KB v2 revision listing failed unexpectedly")
-        raise _kb_v2_revision_list_http_error() from exc
-    return KbV2RevisionListResponse(
+        logger.exception("kho văn bản revision listing failed unexpectedly")
+        raise _legal_kb_revision_list_http_error() from exc
+    return LegalKbRevisionListResponse(
         items=items,
         total=total,
         page=page,
@@ -399,33 +399,33 @@ async def list_kb_v2_revisions(
     )
 
 
-@router.get("/revisions/{revision_id}", response_model=KbV2RevisionDetailResponse)
-async def get_kb_v2_revision_detail(
+@router.get("/revisions/{revision_id}", response_model=LegalKbRevisionDetailResponse)
+async def get_legal_kb_revision_detail(
     revision_id: str,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     try:
         bundle = await load_revision_bundle(db_session, revision_id)
         if normalize_legacy_revision_review_state(bundle):
             await db_session.commit()
         return _serialize_revision_detail(bundle)
     except SQLAlchemyError as exc:
-        logger.exception("KB v2 revision detail failed with a database error")
-        raise _kb_v2_revision_detail_http_error(exc) from exc
+        logger.exception("kho văn bản revision detail failed with a database error")
+        raise _legal_kb_revision_detail_http_error(exc) from exc
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("KB v2 revision detail failed unexpectedly")
-        raise _kb_v2_revision_detail_http_error() from exc
+        logger.exception("kho văn bản revision detail failed unexpectedly")
+        raise _legal_kb_revision_detail_http_error() from exc
 
 
 @router.get("/revisions/{revision_id}/source")
-async def download_kb_v2_revision_source(
+async def download_legal_kb_revision_source(
     revision_id: str,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     bundle = await load_revision_bundle(db_session, revision_id)
     if bundle.source_asset is None:
         raise HTTPException(
@@ -435,20 +435,20 @@ async def download_kb_v2_revision_source(
     return _serve_source_asset(bundle.source_asset)
 
 
-@router.patch("/revisions/{revision_id}/source", response_model=KbV2RevisionDetailResponse)
-async def update_kb_v2_revision_source(
+@router.patch("/revisions/{revision_id}/source", response_model=LegalKbRevisionDetailResponse)
+async def update_legal_kb_revision_source(
     revision_id: str,
-    payload: KbV2RevisionSourceUpdateRequest,
+    payload: LegalKbRevisionSourceUpdateRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     bundle = await load_revision_bundle(db_session, revision_id)
     updates = payload.model_dump(exclude_unset=True)
     _apply_revision_source_updates(bundle.revision, bundle.source_asset, updates)
     if updates:
         db_session.add(
-            KbV2ReviewEvent(
+            LegalKbReviewEvent(
                 review_event_id=str(uuid4()),
                 document_id=bundle.document.document_id,
                 revision_id=bundle.revision.revision_id,
@@ -464,30 +464,30 @@ async def update_kb_v2_revision_source(
     return _serialize_revision_detail(refreshed)
 
 
-@router.get("/documents", response_model=KbV2PublishedDocumentListResponse)
-async def list_kb_v2_documents(
+@router.get("/documents", response_model=LegalKbPublishedDocumentListResponse)
+async def list_legal_kb_documents(
     q: str | None = None,
     status: str | None = None,
     page: int = 1,
     page_size: int = 20,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     try:
         rows = await db_session.execute(
-            select(KbV2LegalDocument)
+            select(LegalKbDocument)
             .options(
-                selectinload(KbV2LegalDocument.revisions).selectinload(KbV2DocumentRevision.source_asset),
-                selectinload(KbV2LegalDocument.revisions).selectinload(KbV2DocumentRevision.standard_summaries),
-                selectinload(KbV2LegalDocument.source_assets),
-                selectinload(KbV2LegalDocument.outgoing_relations),
-                selectinload(KbV2LegalDocument.incoming_relations),
+                selectinload(LegalKbDocument.revisions).selectinload(LegalKbRevision.source_asset),
+                selectinload(LegalKbDocument.revisions).selectinload(LegalKbRevision.standard_summaries),
+                selectinload(LegalKbDocument.source_assets),
+                selectinload(LegalKbDocument.outgoing_relations),
+                selectinload(LegalKbDocument.incoming_relations),
             )
-            .order_by(KbV2LegalDocument.updated_at.desc(), KbV2LegalDocument.created_at.desc())
+            .order_by(LegalKbDocument.updated_at.desc(), LegalKbDocument.created_at.desc())
         )
         normalized_query = (q or "").strip().lower()
         normalized_status = (status or "").strip().lower()
-        items: list[KbV2PublishedDocumentListItemOut] = []
+        items: list[LegalKbPublishedDocumentListItemOut] = []
         for document in rows.scalars().unique():
             bundle = _managed_bundle_from_document(document)
             if bundle is None:
@@ -498,7 +498,7 @@ async def list_kb_v2_documents(
             if normalized_status and display_status != normalized_status:
                 continue
             items.append(
-                KbV2PublishedDocumentListItemOut(
+                LegalKbPublishedDocumentListItemOut(
                     document_id=document.document_id,
                     revision_id=bundle.revision.revision_id,
                     title=document.title,
@@ -519,59 +519,59 @@ async def list_kb_v2_documents(
         total = len(items)
         start = max(0, (page - 1) * page_size)
         end = start + page_size
-        return KbV2PublishedDocumentListResponse(
+        return LegalKbPublishedDocumentListResponse(
             items=items[start:end],
             total=total,
             page=page,
             page_size=page_size,
         )
     except SQLAlchemyError as exc:
-        logger.exception("KB v2 published document listing failed with a database error")
-        raise _kb_v2_runtime_http_error(exc) from exc
+        logger.exception("kho văn bản published document listing failed with a database error")
+        raise _legal_kb_runtime_http_error(exc) from exc
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("KB v2 published document listing failed unexpectedly")
-        raise _kb_v2_list_runtime_http_error() from exc
+        logger.exception("kho văn bản published document listing failed unexpectedly")
+        raise _legal_kb_list_runtime_http_error() from exc
 
 
-@router.get("/relation-targets", response_model=KbV2RelationTargetListResponse)
-async def list_kb_v2_relation_targets(
+@router.get("/relation-targets", response_model=LegalKbRelationTargetListResponse)
+async def list_legal_kb_relation_targets(
     q: str | None = None,
     exclude_document_id: str | None = None,
     limit: int = 50,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     normalized_query = (q or "").strip().lower()
     filters = []
     if exclude_document_id:
-        filters.append(KbV2LegalDocument.document_id != exclude_document_id)
+        filters.append(LegalKbDocument.document_id != exclude_document_id)
     if normalized_query:
         pattern = f"%{normalized_query}%"
         filters.append(
             or_(
-                func.lower(cast(KbV2LegalDocument.document_id, String)).like(pattern),
-                func.lower(func.coalesce(KbV2LegalDocument.document_number, "")).like(pattern),
-                func.lower(func.coalesce(KbV2LegalDocument.title, "")).like(pattern),
+                func.lower(cast(LegalKbDocument.document_id, String)).like(pattern),
+                func.lower(func.coalesce(LegalKbDocument.document_number, "")).like(pattern),
+                func.lower(func.coalesce(LegalKbDocument.title, "")).like(pattern),
             )
         )
 
     safe_limit = min(max(limit, 1), 100)
-    count_statement = select(func.count()).select_from(KbV2LegalDocument)
-    list_statement = select(KbV2LegalDocument)
+    count_statement = select(func.count()).select_from(LegalKbDocument)
+    list_statement = select(LegalKbDocument)
     if filters:
         count_statement = count_statement.where(*filters)
         list_statement = list_statement.where(*filters)
     total = int((await db_session.execute(count_statement)).scalar() or 0)
     rows = await db_session.execute(
         list_statement
-        .order_by(KbV2LegalDocument.updated_at.desc(), KbV2LegalDocument.created_at.desc())
+        .order_by(LegalKbDocument.updated_at.desc(), LegalKbDocument.created_at.desc())
         .limit(safe_limit)
     )
-    return KbV2RelationTargetListResponse(
+    return LegalKbRelationTargetListResponse(
         items=[
-            KbV2RelationTargetItemOut(
+            LegalKbRelationTargetItemOut(
                 document_id=document.document_id,
                 title=document.title,
                 document_number=document.document_number,
@@ -582,26 +582,26 @@ async def list_kb_v2_relation_targets(
     )
 
 
-@router.get("/documents/{document_id}", response_model=KbV2RevisionDetailResponse)
-async def get_kb_v2_document_detail(
+@router.get("/documents/{document_id}", response_model=LegalKbRevisionDetailResponse)
+async def get_legal_kb_document_detail(
     document_id: str,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     bundle = await _load_managed_document_bundle(db_session, document_id)
     if normalize_legacy_revision_review_state(bundle):
         await db_session.commit()
     return _serialize_revision_detail(bundle)
 
 
-@router.patch("/documents/{document_id}", response_model=KbV2RevisionDetailResponse)
-async def update_kb_v2_document(
+@router.patch("/documents/{document_id}", response_model=LegalKbRevisionDetailResponse)
+async def update_legal_kb_document(
     document_id: str,
-    payload: KbV2PublishedDocumentUpdateRequest,
+    payload: LegalKbPublishedDocumentUpdateRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     bundle = await _load_managed_document_bundle(db_session, document_id)
     updates = payload.model_dump(exclude_unset=True)
     document = bundle.document
@@ -628,7 +628,7 @@ async def update_kb_v2_document(
         _refresh_retrieval_units(bundle)
 
         db_session.add(
-            KbV2ReviewEvent(
+            LegalKbReviewEvent(
                 review_event_id=str(uuid4()),
             document_id=document.document_id,
             revision_id=revision.revision_id,
@@ -644,14 +644,14 @@ async def update_kb_v2_document(
     return _serialize_revision_detail(refreshed)
 
 
-@router.post("/documents/{document_id}/status", response_model=KbV2RevisionDetailResponse)
-async def update_kb_v2_document_status(
+@router.post("/documents/{document_id}/status", response_model=LegalKbRevisionDetailResponse)
+async def update_legal_kb_document_status(
     document_id: str,
-    payload: KbV2PublishedDocumentStatusRequest,
+    payload: LegalKbPublishedDocumentStatusRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     bundle = await _load_managed_document_bundle(db_session, document_id)
 
     if payload.status == "suspended":
@@ -683,7 +683,7 @@ async def update_kb_v2_document_status(
     document.metadata_json = metadata
     _refresh_retrieval_units(bundle)
     db_session.add(
-        KbV2ReviewEvent(
+        LegalKbReviewEvent(
             review_event_id=str(uuid4()),
             document_id=document.document_id,
             revision_id=revision.revision_id,
@@ -703,14 +703,14 @@ async def update_kb_v2_document_status(
     return _serialize_revision_detail(refreshed)
 
 
-@router.post("/revisions/{revision_id}/metadata-proposals", response_model=KbV2MetadataProposalOut)
-async def create_kb_v2_metadata_proposal(
+@router.post("/revisions/{revision_id}/metadata-proposals", response_model=LegalKbMetadataProposalOut)
+async def create_legal_kb_metadata_proposal(
     revision_id: str,
-    payload: KbV2MetadataProposalCreateRequest,
+    payload: LegalKbMetadataProposalCreateRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     proposal = await create_metadata_proposal(
         db_session,
         revision_id=revision_id,
@@ -722,14 +722,14 @@ async def create_kb_v2_metadata_proposal(
     return _serialize_metadata_proposal(proposal)
 
 
-@router.post("/metadata-proposals/{proposal_id}/review", response_model=KbV2MetadataProposalOut)
-async def review_kb_v2_metadata_proposal(
+@router.post("/metadata-proposals/{proposal_id}/review", response_model=LegalKbMetadataProposalOut)
+async def review_legal_kb_metadata_proposal(
     proposal_id: str,
-    payload: KbV2ProposalReviewRequest,
+    payload: LegalKbProposalReviewRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     proposal = await review_metadata_proposal(
         db_session,
         proposal_id=proposal_id,
@@ -741,14 +741,14 @@ async def review_kb_v2_metadata_proposal(
     return _serialize_metadata_proposal(proposal)
 
 
-@router.post("/nodes/{node_id}/review", response_model=KbV2CanonicalNodeOut)
-async def review_kb_v2_node(
+@router.post("/nodes/{node_id}/review", response_model=LegalKbNodeOut)
+async def review_legal_kb_node(
     node_id: str,
-    payload: KbV2NodeReviewRequest,
+    payload: LegalKbNodeReviewRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     node = await review_canonical_node(
         db_session,
         node_id=node_id,
@@ -760,14 +760,14 @@ async def review_kb_v2_node(
     return _serialize_node(node)
 
 
-@router.post("/nodes/{node_id}/reset-review", response_model=KbV2CanonicalNodeOut)
-async def reset_kb_v2_node_review(
+@router.post("/nodes/{node_id}/reset-review", response_model=LegalKbNodeOut)
+async def reset_legal_kb_node_review(
     node_id: str,
-    payload: KbV2NodeResetReviewRequest,
+    payload: LegalKbNodeResetReviewRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     node = await reset_canonical_node_review(
         db_session,
         node_id=node_id,
@@ -777,14 +777,14 @@ async def reset_kb_v2_node_review(
     return _serialize_node(node)
 
 
-@router.post("/revisions/{revision_id}/risky-nodes/bulk-review", response_model=KbV2RevisionDetailResponse)
-async def bulk_review_kb_v2_risky_nodes(
+@router.post("/revisions/{revision_id}/risky-nodes/bulk-review", response_model=LegalKbRevisionDetailResponse)
+async def bulk_review_legal_kb_risky_nodes(
     revision_id: str,
-    payload: KbV2RiskyNodeBulkReviewRequest,
+    payload: LegalKbRiskyNodeBulkReviewRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     bundle = await bulk_review_risky_nodes(
         db_session,
         revision_id=revision_id,
@@ -796,14 +796,14 @@ async def bulk_review_kb_v2_risky_nodes(
     return _serialize_revision_detail(bundle)
 
 
-@router.post("/revisions/{revision_id}/relations", response_model=KbV2DocumentRelationOut)
-async def create_kb_v2_relation_proposal(
+@router.post("/revisions/{revision_id}/relations", response_model=LegalKbRelationOut)
+async def create_legal_kb_relation_proposal(
     revision_id: str,
-    payload: KbV2RelationCreateRequest,
+    payload: LegalKbRelationCreateRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     relation = await create_relation_proposal(
         db_session,
         revision_id=revision_id,
@@ -817,14 +817,14 @@ async def create_kb_v2_relation_proposal(
     return _serialize_relation(relation)
 
 
-@router.post("/relations/{relation_id}/review", response_model=KbV2DocumentRelationOut)
-async def review_kb_v2_relation(
+@router.post("/relations/{relation_id}/review", response_model=LegalKbRelationOut)
+async def review_legal_kb_relation(
     relation_id: str,
-    payload: KbV2RelationReviewRequest,
+    payload: LegalKbRelationReviewRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     relation = await review_relation(
         db_session,
         relation_id=relation_id,
@@ -835,14 +835,14 @@ async def review_kb_v2_relation(
     return _serialize_relation(relation)
 
 
-@router.patch("/relations/{relation_id}", response_model=KbV2DocumentRelationOut)
-async def update_kb_v2_relation(
+@router.patch("/relations/{relation_id}", response_model=LegalKbRelationOut)
+async def update_legal_kb_relation(
     relation_id: str,
-    payload: KbV2RelationUpdateRequest,
+    payload: LegalKbRelationUpdateRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     relation = await update_relation_proposal(
         db_session,
         relation_id=relation_id,
@@ -857,12 +857,12 @@ async def update_kb_v2_relation(
 
 
 @router.delete("/relations/{relation_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_kb_v2_relation(
+async def delete_legal_kb_relation(
     relation_id: str,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     await delete_relation(
         db_session,
         relation_id=relation_id,
@@ -871,14 +871,14 @@ async def delete_kb_v2_relation(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
-@router.post("/summaries/{summary_id}/review", response_model=KbV2StandardSummaryOut)
-async def review_kb_v2_summary(
+@router.post("/summaries/{summary_id}/review", response_model=LegalKbSummaryOut)
+async def review_legal_kb_summary(
     summary_id: str,
-    payload: KbV2SummaryReviewRequest,
+    payload: LegalKbSummaryReviewRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     summary = await review_summary(
         db_session,
         summary_id=summary_id,
@@ -889,26 +889,26 @@ async def review_kb_v2_summary(
     return _serialize_summary(summary)
 
 
-@router.post("/revisions/{revision_id}/publish", response_model=KbV2RevisionDetailResponse)
-async def publish_kb_v2_revision(
+@router.post("/revisions/{revision_id}/publish", response_model=LegalKbRevisionDetailResponse)
+async def publish_legal_kb_revision(
     revision_id: str,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     await publish_revision(db_session, revision_id=revision_id, actor_user_id=current_user.user_id)
     bundle = await load_revision_bundle(db_session, revision_id)
     return _serialize_revision_detail(bundle)
 
 
-@router.post("/revisions/{revision_id}/suspend", response_model=KbV2RevisionDetailResponse)
-async def suspend_kb_v2_revision(
+@router.post("/revisions/{revision_id}/suspend", response_model=LegalKbRevisionDetailResponse)
+async def suspend_legal_kb_revision(
     revision_id: str,
-    payload: KbV2SuspendRequest,
+    payload: LegalKbSuspendRequest,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     await suspend_revision(
         db_session,
         revision_id=revision_id,
@@ -919,13 +919,13 @@ async def suspend_kb_v2_revision(
     return _serialize_revision_detail(bundle)
 
 
-@router.post("/revisions/{revision_id}/unsuspend", response_model=KbV2RevisionDetailResponse)
-async def unsuspend_kb_v2_revision(
+@router.post("/revisions/{revision_id}/unsuspend", response_model=LegalKbRevisionDetailResponse)
+async def unsuspend_legal_kb_revision(
     revision_id: str,
     current_user: User = Depends(require_admin),
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_enabled()
+    _ensure_legal_kb_enabled()
     await unsuspend_revision(
         db_session,
         revision_id=revision_id,
@@ -935,8 +935,8 @@ async def unsuspend_kb_v2_revision(
     return _serialize_revision_detail(bundle)
 
 
-def _serialize_upload_response(result: KbV2IngestionResult) -> KbV2UploadResponse:
-    return KbV2UploadResponse(
+def _serialize_upload_response(result: LegalKbIngestionResult) -> LegalKbUploadResponse:
+    return LegalKbUploadResponse(
         document=_serialize_document(result.document),
         revision=_serialize_revision(result.revision),
         source_asset=_serialize_source_asset(result.source_asset),
@@ -946,7 +946,7 @@ def _serialize_upload_response(result: KbV2IngestionResult) -> KbV2UploadRespons
     )
 
 
-def _serialize_revision_detail(bundle) -> KbV2RevisionDetailResponse:
+def _serialize_revision_detail(bundle) -> LegalKbRevisionDetailResponse:
     canonical_nodes = [
         _serialize_node(node)
         for node in sorted(bundle.revision.canonical_nodes, key=lambda item: item.order_index)
@@ -971,7 +971,7 @@ def _serialize_revision_detail(bundle) -> KbV2RevisionDetailResponse:
     pending_risky_nodes = [node for node in risky_nodes if _node_needs_manual_review(node)]
     resolved_risky_nodes = [node for node in risky_nodes if node.node_id not in {item.node_id for item in pending_risky_nodes}]
 
-    return KbV2RevisionDetailResponse(
+    return LegalKbRevisionDetailResponse(
         document=_serialize_document(bundle.document),
         revision=_serialize_revision(bundle.revision),
         source_asset=_serialize_source_asset(bundle.source_asset) if bundle.source_asset else None,
@@ -1008,25 +1008,25 @@ def _serialize_revision_detail(bundle) -> KbV2RevisionDetailResponse:
     )
 
 
-def _is_risky_node(node: KbV2CanonicalNodeOut) -> bool:
+def _is_risky_node(node: LegalKbNodeOut) -> bool:
     return node.node_type in {"appendix", "form", "image_caption", "table"}
 
 
-def _is_reference_only_node(node: KbV2CanonicalNodeOut) -> bool:
+def _is_reference_only_node(node: LegalKbNodeOut) -> bool:
     return bool(node.structured_content.get("review_only")) or node.structured_content.get("answerable") is False
 
 
-def _is_answerable_node(node: KbV2CanonicalNodeOut) -> bool:
+def _is_answerable_node(node: LegalKbNodeOut) -> bool:
     return node.structured_content.get("answerable") is True and not bool(node.structured_content.get("review_only"))
 
 
-def _node_needs_usage_decision(node: KbV2CanonicalNodeOut) -> bool:
+def _node_needs_usage_decision(node: LegalKbNodeOut) -> bool:
     if _is_reference_only_node(node):
         return False
     return _is_risky_node(node) and "answerable" not in node.structured_content
 
 
-def _node_needs_manual_review(node: KbV2CanonicalNodeOut) -> bool:
+def _node_needs_manual_review(node: LegalKbNodeOut) -> bool:
     return _is_risky_node(node) and (node.review_status == "needs_review" or _node_needs_usage_decision(node))
 
 
@@ -1045,9 +1045,9 @@ def _model_node_needs_manual_review(node) -> bool:
 
 def _serialize_revision_list_item(
     *,
-    revision: KbV2DocumentRevision,
+    revision: LegalKbRevision,
     source_file_name: str | None,
-) -> KbV2RevisionListItemOut:
+) -> LegalKbRevisionListItemOut:
     document = revision.document
     source_asset = revision.source_asset
     relations = sorted(
@@ -1091,7 +1091,7 @@ def _serialize_revision_list_item(
         default=None,
     )
 
-    return KbV2RevisionListItemOut(
+    return LegalKbRevisionListItemOut(
         revision_id=revision.revision_id,
         document_id=revision.document_id,
         title=document.title,
@@ -1117,8 +1117,8 @@ def _serialize_revision_list_item(
     )
 
 
-def _serialize_document(document) -> KbV2DocumentOut:
-    return KbV2DocumentOut(
+def _serialize_document(document) -> LegalKbDocumentOut:
+    return LegalKbDocumentOut(
         document_id=document.document_id,
         title=document.title,
         document_number=document.document_number,
@@ -1132,8 +1132,8 @@ def _serialize_document(document) -> KbV2DocumentOut:
     )
 
 
-def _serialize_revision(revision) -> KbV2RevisionOut:
-    return KbV2RevisionOut(
+def _serialize_revision(revision) -> LegalKbRevisionOut:
+    return LegalKbRevisionOut(
         revision_id=revision.revision_id,
         document_id=revision.document_id,
         revision_number=revision.revision_number,
@@ -1149,8 +1149,8 @@ def _serialize_revision(revision) -> KbV2RevisionOut:
     )
 
 
-def _serialize_source_asset(source_asset) -> KbV2SourceAssetOut:
-    return KbV2SourceAssetOut(
+def _serialize_source_asset(source_asset) -> LegalKbSourceAssetOut:
+    return LegalKbSourceAssetOut(
         asset_id=source_asset.asset_id,
         document_id=source_asset.document_id,
         revision_id=source_asset.revision_id,
@@ -1167,8 +1167,8 @@ def _serialize_source_asset(source_asset) -> KbV2SourceAssetOut:
 
 
 def _apply_revision_source_updates(
-    revision: KbV2DocumentRevision,
-    source_asset: KbV2SourceAsset | None,
+    revision: LegalKbRevision,
+    source_asset: LegalKbSourceAsset | None,
     updates: dict,
 ) -> None:
     for field_name in ("source_url", "source_downloaded_at", "source_note"):
@@ -1193,7 +1193,7 @@ def _safe_local_source_path(storage_uri: str) -> Path | None:
     return path
 
 
-def _serve_source_asset(source_asset: KbV2SourceAsset):
+def _serve_source_asset(source_asset: LegalKbSourceAsset):
     media_type = _source_media_type(source_asset.original_filename)
     disposition = "inline" if media_type == "application/pdf" else "attachment"
     if is_object_uri(source_asset.storage_uri):
@@ -1222,8 +1222,8 @@ def _serve_source_asset(source_asset: KbV2SourceAsset):
     )
 
 
-def _serialize_node(node) -> KbV2CanonicalNodeOut:
-    return KbV2CanonicalNodeOut(
+def _serialize_node(node) -> LegalKbNodeOut:
+    return LegalKbNodeOut(
         node_id=node.node_id,
         revision_id=node.revision_id,
         parent_id=node.parent_id,
@@ -1237,8 +1237,8 @@ def _serialize_node(node) -> KbV2CanonicalNodeOut:
     )
 
 
-def _serialize_metadata_proposal(proposal: KbV2MetadataProposal) -> KbV2MetadataProposalOut:
-    return KbV2MetadataProposalOut(
+def _serialize_metadata_proposal(proposal: LegalKbMetadataProposal) -> LegalKbMetadataProposalOut:
+    return LegalKbMetadataProposalOut(
         proposal_id=proposal.proposal_id,
         document_id=proposal.document_id,
         revision_id=proposal.revision_id,
@@ -1255,8 +1255,8 @@ def _serialize_metadata_proposal(proposal: KbV2MetadataProposal) -> KbV2Metadata
     )
 
 
-def _serialize_relation(relation: KbV2DocumentRelation) -> KbV2DocumentRelationOut:
-    return KbV2DocumentRelationOut(
+def _serialize_relation(relation: LegalKbRelation) -> LegalKbRelationOut:
+    return LegalKbRelationOut(
         relation_id=relation.relation_id,
         source_document_id=relation.source_document_id,
         target_document_id=relation.target_document_id,
@@ -1269,8 +1269,8 @@ def _serialize_relation(relation: KbV2DocumentRelation) -> KbV2DocumentRelationO
     )
 
 
-def _serialize_summary(summary: KbV2StandardSummary) -> KbV2StandardSummaryOut:
-    return KbV2StandardSummaryOut(
+def _serialize_summary(summary: LegalKbSummary) -> LegalKbSummaryOut:
+    return LegalKbSummaryOut(
         summary_id=summary.summary_id,
         document_id=summary.document_id,
         revision_id=summary.revision_id,
@@ -1281,8 +1281,8 @@ def _serialize_summary(summary: KbV2StandardSummary) -> KbV2StandardSummaryOut:
     )
 
 
-def _serialize_retrieval_unit(unit) -> KbV2RetrievalUnitOut:
-    return KbV2RetrievalUnitOut(
+def _serialize_retrieval_unit(unit) -> LegalKbRetrievalUnitOut:
+    return LegalKbRetrievalUnitOut(
         retrieval_unit_id=unit.retrieval_unit_id,
         canonical_node_id=unit.canonical_node_id,
         document_id=unit.document_id,
@@ -1295,8 +1295,8 @@ def _serialize_retrieval_unit(unit) -> KbV2RetrievalUnitOut:
     )
 
 
-def _serialize_review_event(event) -> KbV2ReviewEventOut:
-    return KbV2ReviewEventOut(
+def _serialize_review_event(event) -> LegalKbReviewEventOut:
+    return LegalKbReviewEventOut(
         review_event_id=event.review_event_id,
         document_id=event.document_id,
         revision_id=event.revision_id,
@@ -1327,14 +1327,14 @@ def _parse_optional_iso_date(value: str | None, *, field_name: str):
 
 @dataclass
 class _ManagedDocumentBundle:
-    document: KbV2LegalDocument
-    revision: KbV2DocumentRevision
-    source_asset: KbV2SourceAsset | None
-    relations: list[KbV2DocumentRelation]
-    summary: KbV2StandardSummary | None
+    document: LegalKbDocument
+    revision: LegalKbRevision
+    source_asset: LegalKbSourceAsset | None
+    relations: list[LegalKbRelation]
+    summary: LegalKbSummary | None
 
 
-def _managed_bundle_from_document(document: KbV2LegalDocument) -> _ManagedDocumentBundle | None:
+def _managed_bundle_from_document(document: LegalKbDocument) -> _ManagedDocumentBundle | None:
     managed_revisions = [
         revision
         for revision in document.revisions
@@ -1379,7 +1379,7 @@ def _managed_bundle_from_document(document: KbV2LegalDocument) -> _ManagedDocume
     )
 
 
-def _current_repository_revision(document: KbV2LegalDocument) -> KbV2DocumentRevision | None:
+def _current_repository_revision(document: LegalKbDocument) -> LegalKbRevision | None:
     managed_revisions = [
         revision
         for revision in document.revisions
@@ -1395,19 +1395,19 @@ def _current_repository_revision(document: KbV2LegalDocument) -> KbV2DocumentRev
 
 async def _load_managed_document_bundle(session: AsyncSession, document_id: str):
     stmt = (
-        select(KbV2LegalDocument)
-        .where(KbV2LegalDocument.document_id == document_id)
+        select(LegalKbDocument)
+        .where(LegalKbDocument.document_id == document_id)
         .options(
-            selectinload(KbV2LegalDocument.revisions).selectinload(KbV2DocumentRevision.source_asset),
-            selectinload(KbV2LegalDocument.revisions).selectinload(KbV2DocumentRevision.source_assets),
-            selectinload(KbV2LegalDocument.revisions).selectinload(KbV2DocumentRevision.canonical_nodes),
-            selectinload(KbV2LegalDocument.revisions).selectinload(KbV2DocumentRevision.metadata_proposals),
-            selectinload(KbV2LegalDocument.revisions).selectinload(KbV2DocumentRevision.standard_summaries),
-            selectinload(KbV2LegalDocument.revisions).selectinload(KbV2DocumentRevision.retrieval_units),
-            selectinload(KbV2LegalDocument.revisions).selectinload(KbV2DocumentRevision.review_events),
-            selectinload(KbV2LegalDocument.source_assets),
-            selectinload(KbV2LegalDocument.outgoing_relations),
-            selectinload(KbV2LegalDocument.incoming_relations),
+            selectinload(LegalKbDocument.revisions).selectinload(LegalKbRevision.source_asset),
+            selectinload(LegalKbDocument.revisions).selectinload(LegalKbRevision.source_assets),
+            selectinload(LegalKbDocument.revisions).selectinload(LegalKbRevision.canonical_nodes),
+            selectinload(LegalKbDocument.revisions).selectinload(LegalKbRevision.metadata_proposals),
+            selectinload(LegalKbDocument.revisions).selectinload(LegalKbRevision.standard_summaries),
+            selectinload(LegalKbDocument.revisions).selectinload(LegalKbRevision.retrieval_units),
+            selectinload(LegalKbDocument.revisions).selectinload(LegalKbRevision.review_events),
+            selectinload(LegalKbDocument.source_assets),
+            selectinload(LegalKbDocument.outgoing_relations),
+            selectinload(LegalKbDocument.incoming_relations),
         )
     )
     document = await session.scalar(stmt)
@@ -1422,7 +1422,7 @@ async def _load_managed_document_bundle(session: AsyncSession, document_id: str)
     return bundle
 
 
-def _document_matches_query(document: KbV2LegalDocument, normalized_query: str) -> bool:
+def _document_matches_query(document: LegalKbDocument, normalized_query: str) -> bool:
     values = [
         document.title or "",
         document.document_number or "",
@@ -1451,13 +1451,13 @@ def _refresh_retrieval_units(bundle) -> None:
         retrieval_unit.answerable_status = _document_answerable_status(bundle.document) if answerable else "not_answerable"
 
 
-def _document_answerable_status(document: KbV2LegalDocument) -> str:
+def _document_answerable_status(document: LegalKbDocument) -> str:
     today = date.today()
     if document.legal_status == "suspended":
         return "suspended"
     if document.effective_date and document.effective_date > today:
         return "future"
-    if document.expiry_date and document.expiry_date < today:
+    if document.expiry_date and document.expiry_date <= today:
         return "historical"
     if document.legal_status == "expired":
         return "historical"

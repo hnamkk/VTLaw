@@ -1,9 +1,9 @@
-from src.kb_v2.parser import build_canonical_nodes
-from src.kb_v2.retrieval_units import node_is_answerable
+from src.legal_kb.parser import build_canonical_nodes
+from src.legal_kb.retrieval_units import node_is_answerable
 from src.rag.chunking import ChunkDraft
 
 
-def test_kb_v2_parser_restores_article_parent_for_clause_first_articles():
+def test_legal_kb_parser_restores_article_parent_for_clause_first_articles():
     drafts = [
         ChunkDraft(
             text_content="Quy định chung",
@@ -40,7 +40,7 @@ def test_kb_v2_parser_restores_article_parent_for_clause_first_articles():
     assert clause.parent_id == articles[0].node_id
 
 
-def test_kb_v2_parser_never_creates_legal_articles_inside_appendix():
+def test_legal_kb_parser_never_creates_legal_articles_inside_appendix():
     drafts = [
         ChunkDraft(
             text_content="Điều khoản thi hành.",

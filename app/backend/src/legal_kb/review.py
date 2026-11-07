@@ -9,16 +9,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from src.kb_v2.metadata import normalize_document_role, normalize_document_type
-from src.models.kb_v2 import (
-    KbV2CanonicalNode,
-    KbV2DocumentRelation,
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2MetadataProposal,
-    KbV2ReviewEvent,
-    KbV2SourceAsset,
-    KbV2StandardSummary,
+from src.legal_kb.metadata import normalize_document_role, normalize_document_type
+from src.models.legal_kb import (
+    LegalKbNode,
+    LegalKbRelation,
+    LegalKbRevision,
+    LegalKbDocument,
+    LegalKbMetadataProposal,
+    LegalKbReviewEvent,
+    LegalKbSourceAsset,
+    LegalKbSummary,
 )
 
 RELATION_TYPES = {"amends", "supplements", "replaces", "annuls", "guides", "depends_on"}
@@ -29,12 +29,12 @@ ADMIN_REVIEW_ONLY_ROLE = "admin_review_only"
 
 
 @dataclass
-class KbV2RevisionBundle:
-    document: KbV2LegalDocument
-    revision: KbV2DocumentRevision
-    source_asset: KbV2SourceAsset | None
-    summary: KbV2StandardSummary | None
-    relations: list[KbV2DocumentRelation]
+class LegalKbRevisionBundle:
+    document: LegalKbDocument
+    revision: LegalKbRevision
+    source_asset: LegalKbSourceAsset | None
+    summary: LegalKbSummary | None
+    relations: list[LegalKbRelation]
 
 
 async def load_revision_bundle(
@@ -42,31 +42,31 @@ async def load_revision_bundle(
     revision_id: str,
     *,
     for_update: bool = False,
-) -> KbV2RevisionBundle:
+) -> LegalKbRevisionBundle:
     stmt = (
-        select(KbV2DocumentRevision)
-        .where(KbV2DocumentRevision.revision_id == revision_id)
+        select(LegalKbRevision)
+        .where(LegalKbRevision.revision_id == revision_id)
         .options(
-            selectinload(KbV2DocumentRevision.document).selectinload(
-                KbV2LegalDocument.outgoing_relations
+            selectinload(LegalKbRevision.document).selectinload(
+                LegalKbDocument.outgoing_relations
             ),
-            selectinload(KbV2DocumentRevision.document).selectinload(
-                KbV2LegalDocument.incoming_relations
+            selectinload(LegalKbRevision.document).selectinload(
+                LegalKbDocument.incoming_relations
             ),
-            selectinload(KbV2DocumentRevision.source_asset),
-            selectinload(KbV2DocumentRevision.source_assets),
-            selectinload(KbV2DocumentRevision.canonical_nodes),
-            selectinload(KbV2DocumentRevision.metadata_proposals),
-            selectinload(KbV2DocumentRevision.standard_summaries),
-            selectinload(KbV2DocumentRevision.retrieval_units),
-            selectinload(KbV2DocumentRevision.review_events),
+            selectinload(LegalKbRevision.source_asset),
+            selectinload(LegalKbRevision.source_assets),
+            selectinload(LegalKbRevision.canonical_nodes),
+            selectinload(LegalKbRevision.metadata_proposals),
+            selectinload(LegalKbRevision.standard_summaries),
+            selectinload(LegalKbRevision.retrieval_units),
+            selectinload(LegalKbRevision.review_events),
         )
     )
     if for_update:
-        stmt = stmt.with_for_update(of=KbV2DocumentRevision)
+        stmt = stmt.with_for_update(of=LegalKbRevision)
     revision = await session.scalar(stmt)
     if revision is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="KB v2 revision not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="kho văn bản revision not found")
 
     document = revision.document
     source_asset = revision.source_asset or next(
@@ -83,7 +83,7 @@ async def load_revision_bundle(
         key=lambda relation: relation.created_at or datetime.min.replace(tzinfo=UTC),
     )
     summary = revision.standard_summaries[0] if revision.standard_summaries else None
-    return KbV2RevisionBundle(
+    return LegalKbRevisionBundle(
         document=document,
         revision=revision,
         source_asset=source_asset,
@@ -92,7 +92,7 @@ async def load_revision_bundle(
     )
 
 
-def normalize_legacy_revision_review_state(bundle: KbV2RevisionBundle) -> bool:
+def normalize_legacy_revision_review_state(bundle: LegalKbRevisionBundle) -> bool:
     changed = False
 
     for proposal in bundle.revision.metadata_proposals:
@@ -126,9 +126,9 @@ async def create_metadata_proposal(
     proposed_value: str,
     actor_user_id: str | None,
     note: str | None = None,
-) -> KbV2MetadataProposal:
+) -> LegalKbMetadataProposal:
     bundle = await load_revision_bundle(session, revision_id)
-    proposal = KbV2MetadataProposal(
+    proposal = LegalKbMetadataProposal(
         proposal_id=str(uuid4()),
         document_id=bundle.document.document_id,
         revision_id=bundle.revision.revision_id,
@@ -165,11 +165,11 @@ async def review_metadata_proposal(
     actor_user_id: str | None,
     note: str | None = None,
     proposed_value: str | None = None,
-) -> KbV2MetadataProposal:
-    proposal = await session.get(KbV2MetadataProposal, proposal_id)
+) -> LegalKbMetadataProposal:
+    proposal = await session.get(LegalKbMetadataProposal, proposal_id)
     if proposal is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="KB v2 metadata proposal not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="kho văn bản metadata proposal not found"
         )
     if decision not in REVIEW_DECISIONS:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid decision")
@@ -214,10 +214,10 @@ async def review_canonical_node(
     actor_user_id: str | None,
     note: str | None = None,
     answerable: bool | None = None,
-) -> KbV2CanonicalNode:
-    node = await session.get(KbV2CanonicalNode, node_id)
+) -> LegalKbNode:
+    node = await session.get(LegalKbNode, node_id)
     if node is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="KB v2 canonical node not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="kho văn bản canonical node not found")
     if decision not in REVIEW_DECISIONS:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid decision")
 
@@ -251,10 +251,10 @@ async def reset_canonical_node_review(
     node_id: str,
     actor_user_id: str | None,
     note: str | None = None,
-) -> KbV2CanonicalNode:
-    node = await session.get(KbV2CanonicalNode, node_id)
+) -> LegalKbNode:
+    node = await session.get(LegalKbNode, node_id)
     if node is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="KB v2 canonical node not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="kho văn bản canonical node not found")
 
     bundle = await load_revision_bundle(session, node.revision_id)
     previous_review_status = node.review_status
@@ -290,7 +290,7 @@ async def bulk_review_risky_nodes(
     mode: str,
     actor_user_id: str | None,
     note: str | None = None,
-) -> KbV2RevisionBundle:
+) -> LegalKbRevisionBundle:
     if node_type not in RISKY_NODE_TYPES_REQUIRING_MANUAL_REVIEW:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid node_type")
     if mode not in BULK_RISKY_NODE_REVIEW_MODES:
@@ -348,14 +348,14 @@ async def create_relation_proposal(
     source_locator: str | None = None,
     target_locator: str | None = None,
     note: str | None = None,
-) -> KbV2DocumentRelation:
+) -> LegalKbRelation:
     if relation_type not in RELATION_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid relation_type"
         )
 
     bundle = await load_revision_bundle(session, revision_id)
-    target_document = await session.get(KbV2LegalDocument, target_document_id)
+    target_document = await session.get(LegalKbDocument, target_document_id)
     if target_document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy văn bản liên quan.")
     if target_document_id == bundle.document.document_id:
@@ -378,7 +378,7 @@ async def create_relation_proposal(
             detail="Quan hệ này đã tồn tại.",
         )
 
-    relation = KbV2DocumentRelation(
+    relation = LegalKbRelation(
         relation_id=str(uuid4()),
         source_document_id=bundle.document.document_id,
         target_document_id=target_document_id,
@@ -416,20 +416,20 @@ async def review_relation(
     decision: str,
     actor_user_id: str | None,
     note: str | None = None,
-) -> KbV2DocumentRelation:
-    relation = await session.get(KbV2DocumentRelation, relation_id)
+) -> LegalKbRelation:
+    relation = await session.get(LegalKbRelation, relation_id)
     if relation is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="KB v2 relation not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="kho văn bản relation not found")
     if decision not in REVIEW_DECISIONS:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid decision")
 
     revision = await session.scalar(
-        select(KbV2DocumentRevision)
-        .where(KbV2DocumentRevision.document_id == relation.source_document_id)
-        .order_by(KbV2DocumentRevision.created_at.desc())
+        select(LegalKbRevision)
+        .where(LegalKbRevision.document_id == relation.source_document_id)
+        .order_by(LegalKbRevision.created_at.desc())
     )
     if revision is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="KB v2 revision not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="kho văn bản revision not found")
 
     metadata = dict(relation.metadata_json)
     metadata.update(
@@ -467,16 +467,16 @@ async def update_relation_proposal(
     source_locator: str | None = None,
     target_locator: str | None = None,
     note: str | None = None,
-) -> KbV2DocumentRelation:
-    relation = await session.get(KbV2DocumentRelation, relation_id)
+) -> LegalKbRelation:
+    relation = await session.get(LegalKbRelation, relation_id)
     if relation is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="KB v2 relation not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="kho văn bản relation not found")
     if relation_type is not None and relation_type not in RELATION_TYPES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid relation_type"
         )
     if target_document_id is not None:
-        target_document = await session.get(KbV2LegalDocument, target_document_id)
+        target_document = await session.get(LegalKbDocument, target_document_id)
         if target_document is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Target document not found")
         if target_document_id == relation.source_document_id:
@@ -491,12 +491,12 @@ async def update_relation_proposal(
     relation.target_locator = _strip_or_none(target_locator)
 
     revision = await session.scalar(
-        select(KbV2DocumentRevision)
-        .where(KbV2DocumentRevision.document_id == relation.source_document_id)
-        .order_by(KbV2DocumentRevision.created_at.desc())
+        select(LegalKbRevision)
+        .where(LegalKbRevision.document_id == relation.source_document_id)
+        .order_by(LegalKbRevision.created_at.desc())
     )
     if revision is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="KB v2 revision not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="kho văn bản revision not found")
 
     metadata = dict(relation.metadata_json)
     metadata.update(
@@ -536,14 +536,14 @@ async def delete_relation(
     relation_id: str,
     actor_user_id: str | None,
 ) -> None:
-    relation = await session.get(KbV2DocumentRelation, relation_id)
+    relation = await session.get(LegalKbRelation, relation_id)
     if relation is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy quan hệ văn bản.")
 
     revision = await session.scalar(
-        select(KbV2DocumentRevision)
-        .where(KbV2DocumentRevision.document_id == relation.source_document_id)
-        .order_by(KbV2DocumentRevision.created_at.desc())
+        select(LegalKbRevision)
+        .where(LegalKbRevision.document_id == relation.source_document_id)
+        .order_by(LegalKbRevision.created_at.desc())
     )
     if revision is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Không tìm thấy hồ sơ nguồn của quan hệ.")
@@ -576,10 +576,10 @@ async def review_summary(
     decision: str,
     actor_user_id: str | None,
     content: str | None = None,
-) -> KbV2StandardSummary:
-    summary = await session.get(KbV2StandardSummary, summary_id)
+) -> LegalKbSummary:
+    summary = await session.get(LegalKbSummary, summary_id)
     if summary is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="KB v2 summary not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="kho văn bản summary not found")
     if decision not in REVIEW_DECISIONS:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid decision")
 
@@ -606,25 +606,25 @@ async def review_summary(
     return summary
 
 
-async def _refresh_revision_status_after_summary_review(bundle: KbV2RevisionBundle) -> None:
+async def _refresh_revision_status_after_summary_review(bundle: LegalKbRevisionBundle) -> None:
     if bundle.revision.publication_status != "published":
         bundle.revision.review_status = "in_review"
         return
 
     # Avoid leaving a published revision stuck in `in_review` when the only
     # action was approving the standard summary again.
-    from src.kb_v2.publication import collect_publish_blockers
+    from src.legal_kb.publication import collect_publish_blockers
 
     blockers = collect_publish_blockers(bundle)
     bundle.revision.review_status = "approved" if not blockers else "in_review"
 
 
-def relation_review_status(relation: KbV2DocumentRelation) -> str:
+def relation_review_status(relation: LegalKbRelation) -> str:
     return str(relation.metadata_json.get("review_status") or "needs_review")
 
 
 def _apply_approved_metadata(
-    document: KbV2LegalDocument,
+    document: LegalKbDocument,
     field_name: str,
     proposed_value: str,
 ) -> None:
@@ -639,12 +639,12 @@ def _apply_approved_metadata(
     document.metadata_json = {**document.metadata_json, field_name: value}
 
 
-def apply_approved_metadata_to_document(bundle: KbV2RevisionBundle) -> None:
+def apply_approved_metadata_to_document(bundle: LegalKbRevisionBundle) -> None:
     apply_approved_metadata_values(bundle.document, bundle.revision.metadata_proposals)
 
 
 def apply_approved_metadata_values(
-    document: KbV2LegalDocument,
+    document: LegalKbDocument,
     proposals,
 ) -> None:
     for proposal in proposals:
@@ -652,7 +652,7 @@ def apply_approved_metadata_values(
             _apply_approved_metadata(document, proposal.field_name, proposal.proposed_value)
 
 
-def _should_defer_metadata_apply(bundle: KbV2RevisionBundle) -> bool:
+def _should_defer_metadata_apply(bundle: LegalKbRevisionBundle) -> bool:
     return bundle.revision.publication_status == "draft" and bundle.revision.revision_number > 1
 
 
@@ -665,8 +665,8 @@ def _review_event(
     decision: str,
     actor_user_id: str | None,
     details: dict,
-) -> KbV2ReviewEvent:
-    return KbV2ReviewEvent(
+) -> LegalKbReviewEvent:
+    return LegalKbReviewEvent(
         review_event_id=str(uuid4()),
         document_id=document_id,
         revision_id=revision_id,
@@ -679,7 +679,7 @@ def _review_event(
 
 
 def _apply_node_review_outcome(
-    node: KbV2CanonicalNode,
+    node: LegalKbNode,
     *,
     review_status: str,
     note: str | None = None,
@@ -724,7 +724,7 @@ def _apply_node_review_outcome(
     node.structured_content = structured_content
 
 
-def _is_parser_review_only(node: KbV2CanonicalNode) -> bool:
+def _is_parser_review_only(node: LegalKbNode) -> bool:
     structured_content = node.structured_content or {}
     if not bool(structured_content.get("review_only")):
         return False

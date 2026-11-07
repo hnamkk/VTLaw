@@ -1,4 +1,4 @@
-"""Add KB v2 foundation tables.
+"""Add legal knowledge base foundation tables.
 
 Revision ID: 0013_kb_v2_foundation
 Revises: 0012_chat_owner_constraints

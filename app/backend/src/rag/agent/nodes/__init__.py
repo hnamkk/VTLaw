@@ -28,14 +28,14 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import Command
 from sqlalchemy import select
 
-from src.kb_v2.evidence import assemble_evidence_bundle
-from src.kb_v2.temporal import resolve_query_date
-from src.models.kb_v2 import (
-    KbV2DocumentRelation,
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2RetrievalUnit,
-    KbV2StandardSummary,
+from src.legal_kb.evidence import assemble_evidence_bundle
+from src.legal_kb.temporal import resolve_query_date
+from src.models.legal_kb import (
+    LegalKbRelation,
+    LegalKbRevision,
+    LegalKbDocument,
+    LegalKbRetrievalUnit,
+    LegalKbSummary,
 )
 from src.rag.agent.state import AgentState
 from src.rag.embedding import embed_query
@@ -54,11 +54,11 @@ from src.rag.prompts import (
 )
 from src.rag.reranking import rerank_chunks
 from src.rag.retrieval.context_packer import format_context, pack_context
-from src.rag.retrieval.hybrid_v2 import (
+from src.rag.retrieval.hybrid_legal import (
     _document_ids_for_explicit_refs,
     _extract_document_refs,
     future_effective_notice_for_query,
-    hybrid_retrieve_v2,
+    hybrid_retrieve_legal,
 )
 from src.rag.retrieval.query_utils import (
     expand_query_for_retrieval,
@@ -70,7 +70,6 @@ from src.rag.verification import (
     citations_from_retrieval_units,
     compute_faithfulness_score,
     has_hallucination,
-    prune_unsupported_cited_lines,
     verify_citations,
 )
 from src.schemas.rag import ScopeLabel, ScopeResult, VerificationStatus
@@ -78,11 +77,11 @@ from src.schemas.rag import ScopeLabel, ScopeResult, VerificationStatus
 logger = logging.getLogger(__name__)
 
 _DOC_NUMBER_QUERY_PATTERN = re.compile(r"\b\d{1,3}/\d{4}/[^\s,.;:!?)]+", re.IGNORECASE)
-_SUMMARY_GUARDRAIL_REASON = "kb_v2_standard_summary"
-_DOC_NOT_FOUND_GUARDRAIL_REASON = "kb_v2_document_not_found"
-_DOC_LOOKUP_GUARDRAIL_REASON = "kb_v2_document_lookup"
-_EFFECTIVE_STATUS_GUARDRAIL_REASON = "kb_v2_effective_status"
-_HISTORICAL_LOOKUP_GUARDRAIL_REASON = "kb_v2_historical_lookup"
+_SUMMARY_GUARDRAIL_REASON = "legal_kb_standard_summary"
+_DOC_NOT_FOUND_GUARDRAIL_REASON = "legal_kb_document_not_found"
+_DOC_LOOKUP_GUARDRAIL_REASON = "legal_kb_document_lookup"
+_EFFECTIVE_STATUS_GUARDRAIL_REASON = "legal_kb_effective_status"
+_HISTORICAL_LOOKUP_GUARDRAIL_REASON = "legal_kb_historical_lookup"
 _EVIDENCE_CLARIFICATION_GUARDRAIL_REASON = "evidence_clarification"
 _EVIDENCE_MULTIPLE_GUARDRAIL_REASON = "evidence_multiple_possibilities"
 _EVIDENCE_INSUFFICIENT_GUARDRAIL_REASON = "evidence_insufficient"
@@ -106,14 +105,11 @@ _DIRECT_INPUT_RESPONSE_REASONS = {
     "no_supported_citation",
     "out_of_scope",
 }
-_KNOWN_REPLACED_QUERY_DOCUMENTS = {
-    "38/2024/TT-BGTVT": "36/2024/QH15",
-}
 
 
 @dataclass(frozen=True)
-class _KbV2DocumentBundle:
-    document: KbV2LegalDocument
+class _LegalKbDocumentBundle:
+    document: LegalKbDocument
     source_url: str | None = None
 
 
@@ -135,39 +131,39 @@ def _summary_document_number(query: str) -> str | None:
     return match.group(0).strip().rstrip(".,;:!?")
 
 
-async def _kb_v2_standard_summary_response(db_session, query: str) -> str | None:
+async def _legal_kb_standard_summary_response(db_session, query: str) -> str | None:
     document_number = _summary_document_number(query)
     if not document_number:
         return None
     stmt = (
-        select(KbV2StandardSummary.content)
+        select(LegalKbSummary.content)
         .join(
-            KbV2DocumentRevision,
-            KbV2DocumentRevision.revision_id == KbV2StandardSummary.revision_id,
+            LegalKbRevision,
+            LegalKbRevision.revision_id == LegalKbSummary.revision_id,
         )
         .join(
-            KbV2LegalDocument,
-            KbV2LegalDocument.document_id == KbV2StandardSummary.document_id,
+            LegalKbDocument,
+            LegalKbDocument.document_id == LegalKbSummary.document_id,
         )
         .where(
-            KbV2LegalDocument.document_number.ilike(document_number),
-            KbV2LegalDocument.legal_status == "active",
-            KbV2StandardSummary.review_status == "approved",
-            KbV2DocumentRevision.publication_status == "published",
-            KbV2DocumentRevision.review_status == "approved",
+            LegalKbDocument.document_number.ilike(document_number),
+            LegalKbDocument.legal_status == "active",
+            LegalKbSummary.review_status == "approved",
+            LegalKbRevision.publication_status == "published",
+            LegalKbRevision.review_status == "approved",
         )
-        .order_by(KbV2DocumentRevision.created_at.desc())
+        .order_by(LegalKbRevision.created_at.desc())
         .limit(1)
     )
     return await db_session.scalar(stmt)
 
 
-async def _kb_v2_standard_summary_bundle(db_session, query: str) -> tuple[str | None, dict | None]:
+async def _legal_kb_standard_summary_bundle(db_session, query: str) -> tuple[str | None, dict | None]:
     document_number = _summary_document_number(query)
     if not document_number:
         return None, None
-    content = await _kb_v2_standard_summary_response(db_session, query)
-    bundle = await _get_kb_v2_published_document_bundle_by_number(db_session, document_number)
+    content = await _legal_kb_standard_summary_response(db_session, query)
+    bundle = await _get_legal_kb_published_document_bundle_by_number(db_session, document_number)
     return content, (_document_source_from_bundle(bundle) if bundle is not None else None)
 
 
@@ -176,14 +172,14 @@ def _explicit_document_number(query: str) -> str | None:
     return refs[0] if refs else None
 
 
-def _kb_v2_document_not_found_response(document_number: str) -> str:
+def _legal_kb_document_not_found_response(document_number: str) -> str:
     return (
         f"Xin lỗi, tôi chưa tìm thấy văn bản số hiệu {document_number} "
         "đang được công bố trong kho dữ liệu hiện tại."
     )
 
 
-def _kb_v2_summary_missing_response(document_number: str) -> str:
+def _legal_kb_summary_missing_response(document_number: str) -> str:
     return (
         f"Xin lỗi, tôi chưa có bản tóm tắt chuẩn đã duyệt "
         f"cho văn bản số hiệu {document_number}."
@@ -224,54 +220,54 @@ def _document_type_label(document_type: str | None) -> str:
     return labels.get(key, (document_type or "văn bản").replace("_", " ").lower())
 
 
-async def _get_kb_v2_published_document_by_number(db_session, document_number: str):
-    bundle = await _get_kb_v2_published_document_bundle_by_number(db_session, document_number)
+async def _get_legal_kb_published_document_by_number(db_session, document_number: str):
+    bundle = await _get_legal_kb_published_document_bundle_by_number(db_session, document_number)
     return bundle.document if bundle is not None else None
 
 
-async def _get_kb_v2_document_bundle_by_number(
+async def _get_legal_kb_document_bundle_by_number(
     db_session,
     document_number: str,
     *,
     publication_statuses: tuple[str, ...],
     active_only: bool,
-) -> _KbV2DocumentBundle | None:
+) -> _LegalKbDocumentBundle | None:
     if not hasattr(db_session, "execute"):
         return None
     stmt = (
         select(
-            KbV2LegalDocument,
-            KbV2DocumentRevision.source_url.label("revision_source_url"),
+            LegalKbDocument,
+            LegalKbRevision.source_url.label("revision_source_url"),
         )
         .join(
-            KbV2DocumentRevision,
-            KbV2DocumentRevision.document_id == KbV2LegalDocument.document_id,
+            LegalKbRevision,
+            LegalKbRevision.document_id == LegalKbDocument.document_id,
         )
         .where(
-            KbV2LegalDocument.document_number.ilike(document_number),
-            KbV2DocumentRevision.publication_status.in_(publication_statuses),
-            KbV2DocumentRevision.review_status == "approved",
+            LegalKbDocument.document_number.ilike(document_number),
+            LegalKbRevision.publication_status.in_(publication_statuses),
+            LegalKbRevision.review_status == "approved",
         )
-        .order_by(KbV2DocumentRevision.created_at.desc())
+        .order_by(LegalKbRevision.created_at.desc())
         .limit(1)
     )
     if active_only:
-        stmt = stmt.where(KbV2LegalDocument.legal_status == "active")
+        stmt = stmt.where(LegalKbDocument.legal_status == "active")
     row = await db_session.execute(stmt)
     result = row.first()
     if result is None:
         return None
-    return _KbV2DocumentBundle(
+    return _LegalKbDocumentBundle(
         document=result[0],
         source_url=result[1],
     )
 
 
-async def _get_kb_v2_published_document_bundle_by_number(
+async def _get_legal_kb_published_document_bundle_by_number(
     db_session,
     document_number: str,
-) -> _KbV2DocumentBundle | None:
-    return await _get_kb_v2_document_bundle_by_number(
+) -> _LegalKbDocumentBundle | None:
+    return await _get_legal_kb_document_bundle_by_number(
         db_session,
         document_number,
         publication_statuses=("published",),
@@ -279,11 +275,11 @@ async def _get_kb_v2_published_document_bundle_by_number(
     )
 
 
-async def _get_kb_v2_lifecycle_document_bundle_by_number(
+async def _get_legal_kb_lifecycle_document_bundle_by_number(
     db_session,
     document_number: str,
-) -> _KbV2DocumentBundle | None:
-    return await _get_kb_v2_document_bundle_by_number(
+) -> _LegalKbDocumentBundle | None:
+    return await _get_legal_kb_document_bundle_by_number(
         db_session,
         document_number,
         publication_statuses=("published", "suspended", "archived"),
@@ -291,7 +287,7 @@ async def _get_kb_v2_lifecycle_document_bundle_by_number(
     )
 
 
-def _document_source_from_bundle(bundle: _KbV2DocumentBundle | None) -> dict | None:
+def _document_source_from_bundle(bundle: _LegalKbDocumentBundle | None) -> dict | None:
     if bundle is None:
         return None
     document = bundle.document
@@ -307,41 +303,41 @@ def _document_source_from_bundle(bundle: _KbV2DocumentBundle | None) -> dict | N
 async def _find_replacement_bundle_for_document(
     db_session,
     document_id: str,
-) -> _KbV2DocumentBundle | None:
+) -> _LegalKbDocumentBundle | None:
     if not hasattr(db_session, "execute"):
         return None
     stmt = (
         select(
-            KbV2DocumentRelation,
-            KbV2LegalDocument,
-            KbV2DocumentRevision.source_url.label("revision_source_url"),
+            LegalKbRelation,
+            LegalKbDocument,
+            LegalKbRevision.source_url.label("revision_source_url"),
         )
         .join(
-            KbV2LegalDocument,
-            KbV2LegalDocument.document_id == KbV2DocumentRelation.source_document_id,
+            LegalKbDocument,
+            LegalKbDocument.document_id == LegalKbRelation.source_document_id,
         )
         .join(
-            KbV2DocumentRevision,
-            KbV2DocumentRevision.document_id == KbV2LegalDocument.document_id,
+            LegalKbRevision,
+            LegalKbRevision.document_id == LegalKbDocument.document_id,
         )
         .where(
-            KbV2DocumentRelation.target_document_id == document_id,
-            KbV2DocumentRelation.relation_type.in_(("replaces", "annuls")),
-            KbV2DocumentRevision.review_status == "approved",
-            KbV2DocumentRevision.publication_status.in_(("published", "suspended", "archived")),
+            LegalKbRelation.target_document_id == document_id,
+            LegalKbRelation.relation_type.in_(("replaces", "annuls")),
+            LegalKbRevision.review_status == "approved",
+            LegalKbRevision.publication_status.in_(("published", "suspended", "archived")),
         )
-        .order_by(KbV2DocumentRevision.created_at.desc())
+        .order_by(LegalKbRevision.created_at.desc())
     )
     rows = (await db_session.execute(stmt)).all()
     for relation, document, source_url in rows:
         review_status = str((relation.metadata_json or {}).get("review_status") or "needs_review")
         if review_status != "approved":
             continue
-        return _KbV2DocumentBundle(document=document, source_url=source_url)
+        return _LegalKbDocumentBundle(document=document, source_url=source_url)
     return None
 
 
-def _replacement_label(bundle: _KbV2DocumentBundle | None) -> str | None:
+def _replacement_label(bundle: _LegalKbDocumentBundle | None) -> str | None:
     if bundle is None:
         return None
     number = bundle.document.document_number or bundle.document.document_id
@@ -350,7 +346,7 @@ def _replacement_label(bundle: _KbV2DocumentBundle | None) -> str | None:
 
 
 def _historical_reference_from_bundle(
-    bundle: _KbV2DocumentBundle | None,
+    bundle: _LegalKbDocumentBundle | None,
     *,
     replaced_by: str | None = None,
 ) -> dict | None:
@@ -397,23 +393,23 @@ async def _historical_periods_for_documents(
         return []
     stmt = (
         select(
-            KbV2RetrievalUnit.effective_from,
-            KbV2RetrievalUnit.effective_to,
+            LegalKbRetrievalUnit.effective_from,
+            LegalKbRetrievalUnit.effective_to,
         )
         .join(
-            KbV2DocumentRevision,
-            KbV2DocumentRevision.revision_id == KbV2RetrievalUnit.revision_id,
+            LegalKbRevision,
+            LegalKbRevision.revision_id == LegalKbRetrievalUnit.revision_id,
         )
         .where(
-            KbV2DocumentRevision.review_status == "approved",
-            KbV2DocumentRevision.publication_status.in_(("published", "suspended", "archived")),
-            KbV2RetrievalUnit.answerable_status == "historical",
+            LegalKbRevision.review_status == "approved",
+            LegalKbRevision.publication_status.in_(("published", "suspended", "archived")),
+            LegalKbRetrievalUnit.answerable_status == "historical",
         )
         .distinct()
-        .order_by(KbV2RetrievalUnit.effective_from.asc(), KbV2RetrievalUnit.effective_to.asc())
+        .order_by(LegalKbRetrievalUnit.effective_from.asc(), LegalKbRetrievalUnit.effective_to.asc())
     )
     if document_ids:
-        stmt = stmt.where(KbV2RetrievalUnit.document_id.in_(document_ids))
+        stmt = stmt.where(LegalKbRetrievalUnit.document_id.in_(document_ids))
     return list((await db_session.execute(stmt)).all())
 
 
@@ -445,7 +441,7 @@ def _historical_period_clarification_response(periods: list[tuple[date | None, d
     )
 
 
-def _kb_v2_historical_lookup_response(
+def _legal_kb_historical_lookup_response(
     query: str,
     chunks,
     *,
@@ -467,10 +463,10 @@ def _kb_v2_historical_lookup_response(
     )
 
 
-def _kb_v2_lifecycle_response(
-    bundle: _KbV2DocumentBundle,
+def _legal_kb_lifecycle_response(
+    bundle: _LegalKbDocumentBundle,
     *,
-    replacement_bundle: _KbV2DocumentBundle | None = None,
+    replacement_bundle: _LegalKbDocumentBundle | None = None,
 ) -> str:
     document = bundle.document
     parts = [
@@ -487,13 +483,13 @@ def _kb_v2_lifecycle_response(
     return " ".join(parts)
 
 
-async def _kb_v2_document_lookup_response(db_session, document_number: str) -> str | None:
-    bundle = await _get_kb_v2_published_document_bundle_by_number(db_session, document_number)
+async def _legal_kb_document_lookup_response(db_session, document_number: str) -> str | None:
+    bundle = await _get_legal_kb_published_document_bundle_by_number(db_session, document_number)
     if bundle is None:
         return None
     document = bundle.document
 
-    summary = await _kb_v2_standard_summary_response(db_session, document_number)
+    summary = await _legal_kb_standard_summary_response(db_session, document_number)
     summary_excerpt = (summary or "").strip()
     if len(summary_excerpt) > 700:
         summary_excerpt = f"{summary_excerpt[:697].rstrip()}..."
@@ -512,8 +508,8 @@ async def _kb_v2_document_lookup_response(db_session, document_number: str) -> s
     return "\n\n".join(parts)
 
 
-async def _kb_v2_effective_status_response(db_session, document_number: str) -> str | None:
-    bundle = await _get_kb_v2_published_document_bundle_by_number(db_session, document_number)
+async def _legal_kb_effective_status_response(db_session, document_number: str) -> str | None:
+    bundle = await _get_legal_kb_published_document_bundle_by_number(db_session, document_number)
     if bundle is None:
         return None
     document = bundle.document
@@ -561,7 +557,7 @@ async def parse_query(state: AgentState, config: RunnableConfig) -> dict:
         "guardrail_reason": input_guard.reason,
         "final_response": input_guard.safe_response,
         "temporal_notice": None,
-        "kb_version": "kb_v2",
+        "knowledge_base": "legal_kb",
     }
     if follow_up.needs_clarification and not result["guardrail_triggered"]:
         result.update(
@@ -682,7 +678,7 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
     """Run hybrid vector + FTS retrieval. db_session injected via config."""
     query = state.get("retrieval_query") or state.get("normalized_query") or state.get("query", "")
     current_query = state.get("normalized_query") or state.get("query") or query
-    kb_v2_query = current_query if _DOC_NUMBER_QUERY_PATTERN.search(current_query) else query
+    legal_kb_query = current_query if _DOC_NUMBER_QUERY_PATTERN.search(current_query) else query
     db_session = (config.get("configurable") or {}).get("db_session")
 
     if db_session is None:
@@ -690,30 +686,15 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
         return {"retrieved_contexts": [], "status_filter": "active", "repealed_notice": None}
 
     explicit_document_number = state.get("query_document_number") or _explicit_document_number(
-        kb_v2_query
+        legal_kb_query
     )
-    replacement_query_document = _KNOWN_REPLACED_QUERY_DOCUMENTS.get(
-        str(explicit_document_number or "").upper()
-    )
-    forced_semantic_document_numbers: tuple[str, ...] = ()
-    if replacement_query_document:
-        kb_v2_query = f"{kb_v2_query} {replacement_query_document}"
-        explicit_document_number = None
-        forced_semantic_document_numbers = (replacement_query_document,)
     explicit_document_ids = (
-        await _document_ids_for_explicit_refs(db_session, kb_v2_query)
+        await _document_ids_for_explicit_refs(db_session, legal_kb_query)
         if explicit_document_number
         else None
     )
-    semantic_document_numbers = forced_semantic_document_numbers or semantic_document_scope_numbers(
-        kb_v2_query
-    )
-    semantic_document_ids = (
-        await _document_ids_for_explicit_refs(db_session, " ".join(semantic_document_numbers))
-        if semantic_document_numbers and explicit_document_ids is None
-        else None
-    )
-    scoped_document_ids = explicit_document_ids or semantic_document_ids
+    # Topic hints may improve ranking, but must not exclude amendments/new sources.
+    scoped_document_ids = explicit_document_ids
     if explicit_document_number and explicit_document_ids == ():
         return {
             "retrieved_contexts": [],
@@ -722,15 +703,15 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
             "guardrail_triggered": True,
             "guardrail_stage": "retrieval",
             "guardrail_reason": _DOC_NOT_FOUND_GUARDRAIL_REASON,
-            "final_response": _kb_v2_document_not_found_response(explicit_document_number),
+            "final_response": _legal_kb_document_not_found_response(explicit_document_number),
         }
 
     if state.get("query_intent") == "effective_status" and explicit_document_number:
-        source_bundle = await _get_kb_v2_published_document_bundle_by_number(
+        source_bundle = await _get_legal_kb_published_document_bundle_by_number(
             db_session,
             explicit_document_number,
         )
-        effective_status_response = await _kb_v2_effective_status_response(
+        effective_status_response = await _legal_kb_effective_status_response(
             db_session,
             explicit_document_number,
         )
@@ -749,7 +730,7 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
                 "response_historical_references": [],
             }
 
-        lifecycle_bundle = await _get_kb_v2_lifecycle_document_bundle_by_number(
+        lifecycle_bundle = await _get_legal_kb_lifecycle_document_bundle_by_number(
             db_session,
             explicit_document_number,
         )
@@ -769,7 +750,7 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
                 "guardrail_triggered": True,
                 "guardrail_stage": "retrieval",
                 "guardrail_reason": _EFFECTIVE_STATUS_GUARDRAIL_REASON,
-                "final_response": _kb_v2_lifecycle_response(
+                "final_response": _legal_kb_lifecycle_response(
                     lifecycle_bundle,
                     replacement_bundle=replacement_bundle,
                 ),
@@ -790,17 +771,17 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
             "guardrail_triggered": True,
             "guardrail_stage": "retrieval",
             "guardrail_reason": _EFFECTIVE_STATUS_GUARDRAIL_REASON,
-            "final_response": _kb_v2_document_not_found_response(explicit_document_number),
+            "final_response": _legal_kb_document_not_found_response(explicit_document_number),
             "response_document_sources": [],
             "response_historical_references": [],
         }
 
     if state.get("query_intent") == "document_lookup" and explicit_document_number:
-        source_bundle = await _get_kb_v2_published_document_bundle_by_number(
+        source_bundle = await _get_legal_kb_published_document_bundle_by_number(
             db_session,
             explicit_document_number,
         )
-        document_lookup_response = await _kb_v2_document_lookup_response(
+        document_lookup_response = await _legal_kb_document_lookup_response(
             db_session,
             explicit_document_number,
         )
@@ -812,16 +793,16 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
             "guardrail_stage": "retrieval",
             "guardrail_reason": _DOC_LOOKUP_GUARDRAIL_REASON,
             "final_response": document_lookup_response
-            or _kb_v2_document_not_found_response(explicit_document_number),
+            or _legal_kb_document_not_found_response(explicit_document_number),
             "response_document_sources": (
                 [_document_source_from_bundle(source_bundle)] if source_bundle is not None else []
             ),
         }
 
-    summary_document_number = _summary_document_number(kb_v2_query)
-    summary_response, summary_document_source = await _kb_v2_standard_summary_bundle(
+    summary_document_number = _summary_document_number(legal_kb_query)
+    summary_response, summary_document_source = await _legal_kb_standard_summary_bundle(
         db_session,
-        kb_v2_query,
+        legal_kb_query,
     )
     if summary_response or summary_document_number:
         return {
@@ -832,7 +813,7 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
             "guardrail_stage": "retrieval",
             "guardrail_reason": _SUMMARY_GUARDRAIL_REASON,
             "final_response": summary_response
-            or _kb_v2_summary_missing_response(summary_document_number),
+            or _legal_kb_summary_missing_response(summary_document_number),
             "response_document_sources": (
                 [summary_document_source] if summary_document_source is not None else []
             ),
@@ -860,10 +841,10 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
             if len(periods) == 1:
                 historical_query_date = _representative_historical_date(periods[0])
 
-        query_embedding = await embed_query(expand_query_for_retrieval(kb_v2_query))
-        retrieval = await hybrid_retrieve_v2(
+        query_embedding = await embed_query(expand_query_for_retrieval(legal_kb_query))
+        retrieval = await hybrid_retrieve_legal(
             db_session,
-            kb_v2_query,
+            legal_kb_query,
             query_embedding,
             query_date=historical_query_date,
             document_ids=scoped_document_ids,
@@ -882,8 +863,8 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
                 "guardrail_triggered": True,
                 "guardrail_stage": "retrieval",
                 "guardrail_reason": _HISTORICAL_LOOKUP_GUARDRAIL_REASON,
-                "final_response": _kb_v2_historical_lookup_response(
-                    kb_v2_query,
+                "final_response": _legal_kb_historical_lookup_response(
+                    legal_kb_query,
                     chunks,
                     query_date=historical_query_date,
                 ),
@@ -899,10 +880,10 @@ async def hybrid_retrieve_node(state: AgentState, config: RunnableConfig) -> dic
             "response_historical_references": [],
         }
 
-    retrieval_query = kb_v2_query
+    retrieval_query = legal_kb_query
     expanded_retrieval_query = expand_query_for_retrieval(retrieval_query)
     query_embedding = await embed_query(expanded_retrieval_query)
-    retrieval = await hybrid_retrieve_v2(
+    retrieval = await hybrid_retrieve_legal(
         db_session,
         expanded_retrieval_query,
         query_embedding,
@@ -1081,7 +1062,8 @@ def _clean_llm_output(content: str) -> str:
         re.IGNORECASE,
     )
     lines = [line for line in content.splitlines() if not hidden_label.match(line)]
-    return "\n".join(lines).replace("CONTEXT", "dữ liệu tra cứu").strip()
+    cleaned = "\n".join(lines).replace("CONTEXT", "dữ liệu tra cứu")
+    return re.sub(r"[\[(]SOURCE\s+chunk_id=[^\])]+[\])]", "", cleaned, flags=re.IGNORECASE).strip()
 
 
 # --------------------------------------------------------------------------- #
@@ -1182,76 +1164,36 @@ def _display_locator(label: str | None) -> str:
 def _structured_retrieval_answer(chunks) -> str:
     grouped: dict[str, object] = {}
     for chunk in chunks:
-        if not getattr(chunk, "doc_id", None):
+        if not chunk.doc_id or not chunk.chunk_id or chunk.status != "active":
             continue
-        grouped.setdefault(chunk.doc_id, chunk)
-        if len(grouped) >= 3:
+        grouped.setdefault(chunk.chunk_id, chunk)
+        if len(grouped) >= 5:
             break
     if not grouped:
         return INSUFFICIENT_CONTEXT_TEMPLATE
 
-    if len(grouped) == 1:
-        chunk = next(iter(grouped.values()))
-        locator = _display_locator(chunk.locator_label or chunk.doc_title)
-        snippet = _short_snippet(getattr(chunk, "text_snippet", None))
-        if snippet:
-            return (
-                f"Theo {locator} của {chunk.doc_title}, quy định nêu: {snippet} "
-                "Bạn có thể đối chiếu phần căn cứ kèm theo để xem điều khoản chi tiết."
-            )
-        return (
-            f"Căn cứ liên quan nằm tại {locator} của {chunk.doc_title}. "
-            "Bạn có thể đối chiếu phần căn cứ kèm theo để xem điều khoản chi tiết."
-        )
-
-    parts = ["Có thể tách các căn cứ liên quan theo vai trò như sau."]
+    parts = ["Tôi tìm thấy các đoạn quy định liên quan dưới đây. Đây là trích nội dung nguồn để bạn đối chiếu; việc áp dụng còn phụ thuộc tình huống cụ thể."]
     for chunk in grouped.values():
-        snippet = _short_snippet(getattr(chunk, "text_snippet", None), limit=180)
-        locator = _display_locator(chunk.locator_label or "phần liên quan")
-        if snippet:
-            parts.append(f"{chunk.doc_title} ({locator}) nêu: {snippet}")
-        else:
-            parts.append(f"{chunk.doc_title} có căn cứ tại {locator}.")
-    parts.append("Các căn cứ chi tiết được gắn riêng trong phần trích dẫn để bạn đối chiếu.")
-    return " ".join(parts)
-
-
-def _complete_citations_for_mentioned_documents(answer: str, chunks, citations: list) -> list:
-    """Add retrieval-unit citations for documents explicitly named in the answer."""
-    normalized_answer = _normalize_lookup_text(answer)
-    cited_doc_ids = {getattr(citation, "doc_id", None) for citation in citations}
-    completed = list(citations)
-    candidates_by_doc: dict[str, list] = {}
-    for chunk in chunks:
-        document_number = getattr(chunk, "document_number", None)
-        doc_id = getattr(chunk, "doc_id", None)
-        if not document_number or not doc_id or doc_id in cited_doc_ids:
-            continue
-        if _normalize_lookup_text(document_number) not in normalized_answer:
-            continue
-        candidates_by_doc.setdefault(doc_id, []).append(chunk)
-
-    for doc_id, doc_chunks in candidates_by_doc.items():
-        preferred = sorted(
-            doc_chunks,
-            key=lambda item: (
-                getattr(item, "article_num", None) != 3,
-                getattr(item, "clause_num", None) != 1,
-                -(float(getattr(item, "rerank_score", None) or 0.0)),
-            ),
-        )[0]
-        supplemental = citations_from_retrieval_units([preferred])
-        if supplemental:
-            completed.extend(supplemental)
-            cited_doc_ids.add(doc_id)
-    return completed
+        text = chunk.full_text or chunk.text_snippet
+        body = re.split(r"(?:Nội dung|Noi dung)\s*:\s*", text, maxsplit=1)[-1].strip()
+        locator = chunk.locator_label
+        if not locator and chunk.article_num is not None:
+            locator = f"Điều {chunk.article_num}"
+            if chunk.clause_num is not None:
+                locator += f", khoản {chunk.clause_num}"
+            if chunk.point_num:
+                locator += f", điểm {chunk.point_num}"
+        parts.append(f"**{_display_locator(locator)} — {chunk.doc_title}**\n\n{body}")
+    return "\n\n".join(parts)
 
 
 async def verify_citation_node(state: AgentState) -> dict:
     answer = state.get("llm_output") or ""
     chunks = state.get("retrieved_contexts", [])
-    if answer.startswith(("Có thể tách các căn cứ liên quan", "Theo ")):
-        citations = citations_from_retrieval_units(chunks)
+    # Only the exact server-rendered evidence excerpt can use metadata citations.
+    # A model-written prefix is never proof that the answer came from a source.
+    if chunks and answer == _structured_retrieval_answer(chunks):
+        citations = citations_from_retrieval_units(chunks, max_citations=5)
         return {
             "llm_output": answer,
             "verified_citations": citations,
@@ -1267,10 +1209,10 @@ async def verify_citation_node(state: AgentState) -> dict:
         }
     checked_citations = verify_citations(answer, chunks)
     if has_hallucination(checked_citations):
-        pruned_answer = prune_unsupported_cited_lines(answer, chunks)
-        if pruned_answer != answer:
-            answer = pruned_answer
-            checked_citations = verify_citations(answer, chunks)
+        # An unsupported introduction can survive line pruning; reject the whole
+        # generated answer rather than keeping unverified uncited remnants.
+        return {"llm_output": "", "verified_citations": [],
+                "faithfulness_score": 0.0, "has_hallucination": True}
     citations = [
         citation
         for citation in checked_citations
@@ -1280,19 +1222,14 @@ async def verify_citation_node(state: AgentState) -> dict:
         and citation.verification_status
         in {VerificationStatus.verified, VerificationStatus.partial}
     ]
-    citations = _complete_citations_for_mentioned_documents(answer, chunks, citations)
     is_citation_lookup = _is_citation_lookup_query(state.get("query") or "")
-    single_retrieved_document = len({chunk.doc_id for chunk in chunks if chunk.doc_id}) == 1
     if (
         not citations
         and chunks
         and state.get("guardrail_reason") not in _DIRECT_EVIDENCE_GUARDRAIL_REASONS
-        and (
-        is_citation_lookup
-        or "chưa tìm thấy căn cứ đủ chắc" not in answer.lower()
-        or bool(semantic_document_scope_numbers(state.get("query") or ""))
-        or single_retrieved_document
-        )
+        and is_citation_lookup
+        and not checked_citations
+        and "chưa tìm thấy căn cứ đủ chắc" in answer.lower()
     ):
         citations = citations_from_retrieval_units(chunks)
         checked_citations = citations

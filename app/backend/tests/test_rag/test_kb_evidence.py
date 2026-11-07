@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from datetime import date
 
-from src.kb_v2.evidence import EvidenceBundle, _conflict_notices
-from src.models.kb_v2 import KbV2CanonicalProvision, KbV2ProvisionVersion
+from src.legal_kb.evidence import EvidenceBundle, _conflict_notices
+from src.models.legal_kb import LegalKbProvision, LegalKbProvisionVersion
 
 
 def test_evidence_bundle_prompt_notice_includes_conflict_and_amendment_count():
-    version = KbV2ProvisionVersion(
+    version = LegalKbProvisionVersion(
         provision_version_id="version-1",
         canonical_provision_id="provision-1",
         revision_id="rev-1",
@@ -28,20 +28,20 @@ def test_evidence_bundle_prompt_notice_includes_conflict_and_amendment_count():
 
 
 def test_conflict_notices_flags_multiple_versions_for_same_provision():
-    provision = KbV2CanonicalProvision(
+    provision = LegalKbProvision(
         canonical_provision_id="provision-1",
         document_id="doc-1",
         provision_key="dieu-1",
         label="Dieu 1",
     )
-    version_a = KbV2ProvisionVersion(
+    version_a = LegalKbProvisionVersion(
         provision_version_id="version-a",
         canonical_provision_id="provision-1",
         revision_id="rev-1",
         text="Noi dung A.",
         answerable_status="active",
     )
-    version_b = KbV2ProvisionVersion(
+    version_b = LegalKbProvisionVersion(
         provision_version_id="version-b",
         canonical_provision_id="provision-1",
         revision_id="rev-2",

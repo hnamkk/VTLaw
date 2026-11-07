@@ -244,7 +244,14 @@ def is_small_talk_query(query: str) -> bool:
         return False
     if normalized in _SMALL_TALK_EXACT:
         return True
-    return len(normalized.split()) <= 5 and normalized.startswith(_SMALL_TALK_PREFIXES)
+    if _domain_signals(query)[0] or is_explicit_legal_document_query(query):
+        return False
+    # Consume only social words, rather than accepting any short greeting prefix.
+    return bool(re.fullmatch(
+        r"(?:(?:xin )?chao|hello|hi|hey|cam on|thanks|thank you|tam biet|bye)"
+        r"(?:\s+(?:ban|a|ai|nhe|nha|nhi|oi|rat|nhieu|tro ly|chatbot|buoi sang|buoi toi))*",
+        normalized,
+    ))
 
 
 def _domain_signals(query: str) -> tuple[bool, bool]:
@@ -262,7 +269,8 @@ def _domain_signals(query: str) -> tuple[bool, bool]:
         contains(phrase) for phrase in _LICENSE_CLASS_CONTEXT
     )
     return (
-        has_license_class_context or any(contains(phrase) for phrase in _ROAD_DOMAIN_PHRASES),
+        bool(re.search(r"\b[pwris][\s.-]?\d{2,3}[a-z]?\b", query, re.IGNORECASE))
+        or has_license_class_context or any(contains(phrase) for phrase in _ROAD_DOMAIN_PHRASES),
         any(contains(phrase) for phrase in _NON_ROAD_DOMAIN_PHRASES),
     )
 

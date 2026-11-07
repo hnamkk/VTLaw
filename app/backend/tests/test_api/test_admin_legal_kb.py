@@ -8,18 +8,27 @@ import pytest
 from docx import Document
 from sqlalchemy.exc import MissingGreenlet
 
+from src.api.v1.admin_legal_kb import _document_answerable_status
 from src.auth.dependencies import require_admin
 from src.db.session import get_session
 from src.main import app
-from src.models.kb_v2 import (
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2MetadataProposal,
-    KbV2RetrievalUnit,
-    KbV2ReviewEvent,
-    KbV2SourceAsset,
-    KbV2StandardSummary,
+from src.models.legal_kb import (
+    LegalKbRevision,
+    LegalKbDocument,
+    LegalKbMetadataProposal,
+    LegalKbRetrievalUnit,
+    LegalKbReviewEvent,
+    LegalKbSourceAsset,
+    LegalKbSummary,
 )
+
+
+def test_document_status_treats_expiry_as_exclusive():
+    document = SimpleNamespace(
+        legal_status="active", effective_date=None, expiry_date=date.today()
+    )
+
+    assert _document_answerable_status(document) == "historical"
 
 
 @pytest.fixture(autouse=True)
@@ -33,8 +42,8 @@ def admin_dependency_override():
     app.dependency_overrides.pop(require_admin, None)
 
 
-class _KbV2Session:
-    def __init__(self, *, duplicate: KbV2SourceAsset | None = None):
+class _LegalKbSession:
+    def __init__(self, *, duplicate: LegalKbSourceAsset | None = None):
         self.duplicate = duplicate
         self.added: list[object] = []
         self.committed = False
@@ -52,8 +61,8 @@ class _KbV2Session:
         self.committed = True
 
 
-class _ReplacementUploadSession(_KbV2Session):
-    def __init__(self, document: KbV2LegalDocument):
+class _ReplacementUploadSession(_LegalKbSession):
+    def __init__(self, document: LegalKbDocument):
         super().__init__()
         self.scalars = [document, None]
 
@@ -162,8 +171,13 @@ def _build_docx_with_appendix_and_footnotes() -> bytes:
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_upload_endpoint_available_without_feature_flag(client, monkeypatch):
-    session = _KbV2Session()
+async def test_legal_kb_upload_endpoint_available_without_feature_flag(client, monkeypatch, tmp_path):
+    from src.core.config import settings
+
+    monkeypatch.setattr(settings, "KB_LOCAL_STORAGE_PATH", str(tmp_path))
+    monkeypatch.setattr(settings, "OBJECT_STORAGE_ENABLED", False)
+    monkeypatch.setattr(settings, "KB_REQUIRE_OBJECT_STORAGE", False)
+    session = _LegalKbSession()
 
     async def override_session():
         yield session
@@ -171,10 +185,10 @@ async def test_kb_v2_upload_endpoint_available_without_feature_flag(client, monk
     app.dependency_overrides[get_session] = override_session
     try:
         response = await client.post(
-            "/api/v1/admin/kb-v2/revisions/upload",
+            "/api/v1/admin/legal-kb/revisions/upload",
             files={"file": ("fresh.docx", _build_docx_bytes(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document")},
             data={
-                "title": "Thông tư thử nghiệm KB v2",
+                "title": "Thông tư thử nghiệm kho văn bản",
                 "source_url": "https://example.test/fresh.docx",
                 "source_downloaded_at": "2026-07-02",
                 "source_note": "Nguồn thử nghiệm",
@@ -187,18 +201,18 @@ async def test_kb_v2_upload_endpoint_available_without_feature_flag(client, monk
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_upload_creates_draft_revision_and_canonical_nodes(client, tmp_path, monkeypatch):
-    session = _KbV2Session()
+async def test_legal_kb_upload_creates_draft_revision_and_canonical_nodes(client, tmp_path, monkeypatch):
+    session = _LegalKbSession()
 
     async def override_session():
         yield session
 
-    monkeypatch.setattr("src.kb_v2.ingestion.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
-    monkeypatch.setattr("src.kb_v2.ingestion.settings.OBJECT_STORAGE_ENABLED", False)
+    monkeypatch.setattr("src.legal_kb.ingestion.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
+    monkeypatch.setattr("src.legal_kb.ingestion.settings.OBJECT_STORAGE_ENABLED", False)
     app.dependency_overrides[get_session] = override_session
     try:
         response = await client.post(
-            "/api/v1/admin/kb-v2/revisions/upload",
+            "/api/v1/admin/legal-kb/revisions/upload",
             files={
                 "file": (
                     "fresh.docx",
@@ -207,7 +221,7 @@ async def test_kb_v2_upload_creates_draft_revision_and_canonical_nodes(client, t
                 )
             },
             data={
-                "title": "Thông tư thử nghiệm KB v2",
+                "title": "Thông tư thử nghiệm kho văn bản",
                 "document_number": "12/2026/TT-BGTVT",
                 "document_type": "THONG_TU",
                 "issuing_authority": "Bộ GTVT",
@@ -239,12 +253,12 @@ async def test_kb_v2_upload_creates_draft_revision_and_canonical_nodes(client, t
     )
     assert any(node["node_type"] == "article" and node["review_status"] == "approved" for node in payload["canonical_nodes"])
 
-    documents = [obj for obj in session.added if isinstance(obj, KbV2LegalDocument)]
-    revisions = [obj for obj in session.added if isinstance(obj, KbV2DocumentRevision)]
-    source_assets = [obj for obj in session.added if isinstance(obj, KbV2SourceAsset)]
-    metadata_proposals = [obj for obj in session.added if isinstance(obj, KbV2MetadataProposal)]
-    summaries = [obj for obj in session.added if isinstance(obj, KbV2StandardSummary)]
-    retrieval_units = [obj for obj in session.added if isinstance(obj, KbV2RetrievalUnit)]
+    documents = [obj for obj in session.added if isinstance(obj, LegalKbDocument)]
+    revisions = [obj for obj in session.added if isinstance(obj, LegalKbRevision)]
+    source_assets = [obj for obj in session.added if isinstance(obj, LegalKbSourceAsset)]
+    metadata_proposals = [obj for obj in session.added if isinstance(obj, LegalKbMetadataProposal)]
+    summaries = [obj for obj in session.added if isinstance(obj, LegalKbSummary)]
+    retrieval_units = [obj for obj in session.added if isinstance(obj, LegalKbRetrievalUnit)]
 
     assert len(documents) == 1
     assert len(revisions) == 1
@@ -265,8 +279,8 @@ async def test_kb_v2_upload_creates_draft_revision_and_canonical_nodes(client, t
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_replacement_upload_creates_draft_revision_for_existing_document(client, tmp_path, monkeypatch):
-    document = KbV2LegalDocument(
+async def test_legal_kb_replacement_upload_creates_draft_revision_for_existing_document(client, tmp_path, monkeypatch):
+    document = LegalKbDocument(
         document_id="22222222-2222-2222-2222-222222222222",
         title="Nghị định đang công bố",
         document_number="67/2023/NĐ-CP",
@@ -278,7 +292,7 @@ async def test_kb_v2_replacement_upload_creates_draft_revision_for_existing_docu
         metadata_json={"document_role": "base"},
     )
     document.revisions = [
-        KbV2DocumentRevision(
+        LegalKbRevision(
             revision_id="33333333-3333-3333-3333-333333333333",
             document_id=document.document_id,
             revision_number=1,
@@ -293,12 +307,12 @@ async def test_kb_v2_replacement_upload_creates_draft_revision_for_existing_docu
     async def override_session():
         yield session
 
-    monkeypatch.setattr("src.kb_v2.ingestion.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
-    monkeypatch.setattr("src.kb_v2.ingestion.settings.OBJECT_STORAGE_ENABLED", False)
+    monkeypatch.setattr("src.legal_kb.ingestion.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
+    monkeypatch.setattr("src.legal_kb.ingestion.settings.OBJECT_STORAGE_ENABLED", False)
     app.dependency_overrides[get_session] = override_session
     try:
         response = await client.post(
-            f"/api/v1/admin/kb-v2/documents/{document.document_id}/replacement-revisions/upload",
+            f"/api/v1/admin/legal-kb/documents/{document.document_id}/replacement-revisions/upload",
             files={
                 "file": (
                     "replacement.docx",
@@ -330,9 +344,9 @@ async def test_kb_v2_replacement_upload_creates_draft_revision_for_existing_docu
     assert payload["revision"]["publication_status"] == "draft"
     assert payload["source_asset"]["original_filename"] == "replacement.docx"
 
-    documents = [obj for obj in session.added if isinstance(obj, KbV2LegalDocument)]
-    revisions = [obj for obj in session.added if isinstance(obj, KbV2DocumentRevision)]
-    events = [obj for obj in session.added if isinstance(obj, KbV2ReviewEvent)]
+    documents = [obj for obj in session.added if isinstance(obj, LegalKbDocument)]
+    revisions = [obj for obj in session.added if isinstance(obj, LegalKbRevision)]
+    events = [obj for obj in session.added if isinstance(obj, LegalKbReviewEvent)]
 
     assert documents == []
     assert len(revisions) == 1
@@ -342,18 +356,18 @@ async def test_kb_v2_replacement_upload_creates_draft_revision_for_existing_docu
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_upload_marks_header_signature_and_distribution_as_review_only(client, tmp_path, monkeypatch):
-    session = _KbV2Session()
+async def test_legal_kb_upload_marks_header_signature_and_distribution_as_review_only(client, tmp_path, monkeypatch):
+    session = _LegalKbSession()
 
     async def override_session():
         yield session
 
-    monkeypatch.setattr("src.kb_v2.ingestion.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
-    monkeypatch.setattr("src.kb_v2.ingestion.settings.OBJECT_STORAGE_ENABLED", False)
+    monkeypatch.setattr("src.legal_kb.ingestion.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
+    monkeypatch.setattr("src.legal_kb.ingestion.settings.OBJECT_STORAGE_ENABLED", False)
     app.dependency_overrides[get_session] = override_session
     try:
         response = await client.post(
-            "/api/v1/admin/kb-v2/revisions/upload",
+            "/api/v1/admin/legal-kb/revisions/upload",
             files={
                 "file": (
                     "review-only.docx",
@@ -389,24 +403,24 @@ async def test_kb_v2_upload_marks_header_signature_and_distribution_as_review_on
     assert roles["national_header"]["structured_content"]["review_only"] is True
     assert roles["national_header"]["structured_content"]["answerable"] is False
 
-    summaries = [obj for obj in session.added if isinstance(obj, KbV2StandardSummary)]
+    summaries = [obj for obj in session.added if isinstance(obj, LegalKbSummary)]
     assert len(summaries) == 1
     assert "quốc hiệu, tiêu ngữ" in summaries[0].content.lower()
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_upload_auto_classifies_article_tables_appendix_materials_and_footnotes(client, tmp_path, monkeypatch):
-    session = _KbV2Session()
+async def test_legal_kb_upload_auto_classifies_article_tables_appendix_materials_and_footnotes(client, tmp_path, monkeypatch):
+    session = _LegalKbSession()
 
     async def override_session():
         yield session
 
-    monkeypatch.setattr("src.kb_v2.ingestion.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
-    monkeypatch.setattr("src.kb_v2.ingestion.settings.OBJECT_STORAGE_ENABLED", False)
+    monkeypatch.setattr("src.legal_kb.ingestion.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
+    monkeypatch.setattr("src.legal_kb.ingestion.settings.OBJECT_STORAGE_ENABLED", False)
     app.dependency_overrides[get_session] = override_session
     try:
         response = await client.post(
-            "/api/v1/admin/kb-v2/revisions/upload",
+            "/api/v1/admin/legal-kb/revisions/upload",
             files={
                 "file": (
                     "appendix.docx",
@@ -463,14 +477,14 @@ async def test_kb_v2_upload_auto_classifies_article_tables_appendix_materials_an
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_upload_rejects_duplicate_checksum(client, tmp_path, monkeypatch):
-    session = _KbV2Session(
-        duplicate=KbV2SourceAsset(
+async def test_legal_kb_upload_rejects_duplicate_checksum(client, tmp_path, monkeypatch):
+    session = _LegalKbSession(
+        duplicate=LegalKbSourceAsset(
             asset_id="asset-1",
             document_id="doc-1",
             revision_id="rev-1",
             asset_role="source",
-            storage_uri="s3://legalai/kb-v2/sources/doc-1/rev-1/file.docx",
+            storage_uri="s3://legalai/legal-kb/sources/doc-1/rev-1/file.docx",
             original_filename="existing.docx",
             mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             sha256="ignored",
@@ -480,12 +494,12 @@ async def test_kb_v2_upload_rejects_duplicate_checksum(client, tmp_path, monkeyp
     async def override_session():
         yield session
 
-    monkeypatch.setattr("src.kb_v2.ingestion.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
-    monkeypatch.setattr("src.kb_v2.ingestion.settings.OBJECT_STORAGE_ENABLED", False)
+    monkeypatch.setattr("src.legal_kb.ingestion.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
+    monkeypatch.setattr("src.legal_kb.ingestion.settings.OBJECT_STORAGE_ENABLED", False)
     app.dependency_overrides[get_session] = override_session
     try:
         response = await client.post(
-            "/api/v1/admin/kb-v2/revisions/upload",
+            "/api/v1/admin/legal-kb/revisions/upload",
             files={
                 "file": (
                     "fresh.docx",
@@ -494,7 +508,7 @@ async def test_kb_v2_upload_rejects_duplicate_checksum(client, tmp_path, monkeyp
                 )
             },
             data={
-                "title": "Thông tư thử nghiệm KB v2",
+                "title": "Thông tư thử nghiệm kho văn bản",
                 "source_url": "https://example.test/fresh.docx",
                 "source_downloaded_at": "2026-07-02",
                 "source_note": "Nguồn thử nghiệm",
@@ -511,7 +525,7 @@ async def test_kb_v2_upload_rejects_duplicate_checksum(client, tmp_path, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_revision_list_returns_revision_rows(client, monkeypatch):
+async def test_legal_kb_revision_list_returns_revision_rows(client, monkeypatch):
     session = _SequenceSession(
         _ListResult(scalar_value=1),
         _ListResult(
@@ -549,7 +563,7 @@ async def test_kb_v2_revision_list_returns_revision_rows(client, monkeypatch):
                             SimpleNamespace(decision="metadata_reviewed", created_at=datetime(2026, 7, 5, tzinfo=UTC)),
                         ],
                         document=SimpleNamespace(
-                            title="Van ban KB v2",
+                            title="Van ban kho văn bản",
                             document_number="12/2026/TT-BGTVT",
                             document_type="THONG_TU",
                             issuing_authority="Bo GTVT",
@@ -588,10 +602,10 @@ async def test_kb_v2_revision_list_returns_revision_rows(client, monkeypatch):
     async def override_session():
         yield session
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.collect_publish_blockers", lambda _bundle: ["node pending"])
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.collect_publish_blockers", lambda _bundle: ["node pending"])
     app.dependency_overrides[get_session] = override_session
     try:
-        response = await client.get("/api/v1/admin/kb-v2/revisions")
+        response = await client.get("/api/v1/admin/legal-kb/revisions")
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -614,7 +628,7 @@ async def test_kb_v2_revision_list_returns_revision_rows(client, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_revision_list_leaves_updated_at_empty_when_only_created_event_exists(client, monkeypatch):
+async def test_legal_kb_revision_list_leaves_updated_at_empty_when_only_created_event_exists(client, monkeypatch):
     session = _SequenceSession(
         _ListResult(scalar_value=1),
         _ListResult(
@@ -658,10 +672,10 @@ async def test_kb_v2_revision_list_leaves_updated_at_empty_when_only_created_eve
     async def override_session():
         yield session
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.collect_publish_blockers", lambda _bundle: [])
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.collect_publish_blockers", lambda _bundle: [])
     app.dependency_overrides[get_session] = override_session
     try:
-        response = await client.get("/api/v1/admin/kb-v2/revisions")
+        response = await client.get("/api/v1/admin/legal-kb/revisions")
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -672,7 +686,7 @@ async def test_kb_v2_revision_list_leaves_updated_at_empty_when_only_created_eve
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_revision_list_returns_friendly_error_when_serialization_fails(client, monkeypatch):
+async def test_legal_kb_revision_list_returns_friendly_error_when_serialization_fails(client, monkeypatch):
     session = _SequenceSession(
         _ListResult(scalar_value=1),
         _ListResult(
@@ -717,10 +731,10 @@ async def test_kb_v2_revision_list_returns_friendly_error_when_serialization_fai
     def raise_unexpected(*, revision, source_file_name):
         raise RuntimeError(f"broken revision: {revision.revision_id} / {source_file_name}")
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2._serialize_revision_list_item", raise_unexpected)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb._serialize_revision_list_item", raise_unexpected)
     app.dependency_overrides[get_session] = override_session
     try:
-        response = await client.get("/api/v1/admin/kb-v2/revisions")
+        response = await client.get("/api/v1/admin/legal-kb/revisions")
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -730,7 +744,7 @@ async def test_kb_v2_revision_list_returns_friendly_error_when_serialization_fai
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_published_document_list_serializes_revision_summary_source_and_relations(client, monkeypatch):
+async def test_legal_kb_published_document_list_serializes_revision_summary_source_and_relations(client, monkeypatch):
     revision = SimpleNamespace(
         revision_id="rev-v2",
         publication_status="published",
@@ -788,7 +802,7 @@ async def test_kb_v2_published_document_list_serializes_revision_summary_source_
 
     app.dependency_overrides[get_session] = override_session
     try:
-        response = await client.get("/api/v1/admin/kb-v2/documents?page=1&page_size=10")
+        response = await client.get("/api/v1/admin/legal-kb/documents?page=1&page_size=10")
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -803,7 +817,7 @@ async def test_kb_v2_published_document_list_serializes_revision_summary_source_
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_relation_targets_include_draft_documents_and_exclude_current_document(client):
+async def test_legal_kb_relation_targets_include_draft_documents_and_exclude_current_document(client):
     documents = [
         SimpleNamespace(
             document_id="doc-draft",
@@ -827,7 +841,7 @@ async def test_kb_v2_relation_targets_include_draft_documents_and_exclude_curren
     app.dependency_overrides[get_session] = override_session
     try:
         response = await client.get(
-            "/api/v1/admin/kb-v2/relation-targets",
+            "/api/v1/admin/legal-kb/relation-targets",
             params={"q": "2024", "exclude_document_id": "doc-current"},
         )
     finally:
@@ -852,7 +866,7 @@ async def test_kb_v2_relation_targets_include_draft_documents_and_exclude_curren
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_published_document_list_hides_internal_server_error_when_serialization_fails(client, monkeypatch):
+async def test_legal_kb_published_document_list_hides_internal_server_error_when_serialization_fails(client, monkeypatch):
     document = SimpleNamespace(
         document_id="doc-v2",
         title="Văn bản đang công bố",
@@ -878,10 +892,10 @@ async def test_kb_v2_published_document_list_hides_internal_server_error_when_se
     def raise_missing_greenlet(_document):
         raise MissingGreenlet("greenlet_spawn has not been called")
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2._managed_bundle_from_document", raise_missing_greenlet)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb._managed_bundle_from_document", raise_missing_greenlet)
     app.dependency_overrides[get_session] = override_session
     try:
-        response = await client.get("/api/v1/admin/kb-v2/documents?page=1&page_size=10")
+        response = await client.get("/api/v1/admin/legal-kb/documents?page=1&page_size=10")
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -892,8 +906,8 @@ async def test_kb_v2_published_document_list_hides_internal_server_error_when_se
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_revision_detail_returns_review_aggregate_fields(client, monkeypatch):
-    session = _KbV2Session()
+async def test_legal_kb_revision_detail_returns_review_aggregate_fields(client, monkeypatch):
+    session = _LegalKbSession()
 
     async def override_session():
         yield session
@@ -956,7 +970,7 @@ async def test_kb_v2_revision_detail_returns_review_aggregate_fields(client, mon
         return SimpleNamespace(
             document=SimpleNamespace(
                 document_id="doc-v2",
-                title="Van ban KB v2",
+                title="Van ban kho văn bản",
                 document_number="12/2026/TT-BGTVT",
                 document_type="THONG_TU",
                 issuing_authority="Bo GTVT",
@@ -991,12 +1005,12 @@ async def test_kb_v2_revision_detail_returns_review_aggregate_fields(client, mon
             ),
         )
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.normalize_legacy_revision_review_state", lambda _bundle: False)
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.collect_publish_blockers", lambda _bundle: [])
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.normalize_legacy_revision_review_state", lambda _bundle: False)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.collect_publish_blockers", lambda _bundle: [])
     app.dependency_overrides[get_session] = override_session
     try:
-        response = await client.get("/api/v1/admin/kb-v2/revisions/rev-v2")
+        response = await client.get("/api/v1/admin/legal-kb/revisions/rev-v2")
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -1013,8 +1027,8 @@ async def test_kb_v2_revision_detail_returns_review_aggregate_fields(client, mon
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_revision_detail_returns_friendly_error_when_serialization_fails(client, monkeypatch):
-    session = _KbV2Session()
+async def test_legal_kb_revision_detail_returns_friendly_error_when_serialization_fails(client, monkeypatch):
+    session = _LegalKbSession()
 
     async def override_session():
         yield session
@@ -1032,12 +1046,12 @@ async def test_kb_v2_revision_detail_returns_friendly_error_when_serialization_f
     def raise_unexpected(_bundle):
         raise RuntimeError("broken revision detail")
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.normalize_legacy_revision_review_state", lambda _bundle: False)
-    monkeypatch.setattr("src.api.v1.admin_kb_v2._serialize_revision_detail", raise_unexpected)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.normalize_legacy_revision_review_state", lambda _bundle: False)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb._serialize_revision_detail", raise_unexpected)
     app.dependency_overrides[get_session] = override_session
     try:
-        response = await client.get("/api/v1/admin/kb-v2/revisions/rev-v2")
+        response = await client.get("/api/v1/admin/legal-kb/revisions/rev-v2")
     finally:
         app.dependency_overrides.pop(get_session, None)
 
@@ -1048,7 +1062,7 @@ async def test_kb_v2_revision_detail_returns_friendly_error_when_serialization_f
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_unsuspend_endpoint_calls_publication_service(client, monkeypatch):
+async def test_legal_kb_unsuspend_endpoint_calls_publication_service(client, monkeypatch):
     calls: list[tuple[str, str | None]] = []
 
     async def fake_unsuspend_revision(_session, *, revision_id: str, actor_user_id: str | None):
@@ -1060,7 +1074,7 @@ async def test_kb_v2_unsuspend_endpoint_calls_publication_service(client, monkey
         return SimpleNamespace(
             document=SimpleNamespace(
                 document_id="doc-v2",
-                title="Van ban KB v2",
+                title="Van ban kho văn bản",
                 document_number="12/2026/TT-BGTVT",
                 document_type="THONG_TU",
                 issuing_authority="Bo GTVT",
@@ -1106,11 +1120,11 @@ async def test_kb_v2_unsuspend_endpoint_calls_publication_service(client, monkey
             summary=None,
         )
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.unsuspend_revision", fake_unsuspend_revision)
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.load_revision_bundle", fake_load_revision_bundle)
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.collect_publish_blockers", lambda _bundle: [])
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.unsuspend_revision", fake_unsuspend_revision)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.collect_publish_blockers", lambda _bundle: [])
 
-    response = await client.post("/api/v1/admin/kb-v2/revisions/rev-v2/unsuspend")
+    response = await client.post("/api/v1/admin/legal-kb/revisions/rev-v2/unsuspend")
 
     assert response.status_code == 200
     assert calls == [("rev-v2", "11111111-1111-1111-1111-111111111111")]
@@ -1118,7 +1132,7 @@ async def test_kb_v2_unsuspend_endpoint_calls_publication_service(client, monkey
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_relation_update_endpoint_calls_review_service(client, monkeypatch):
+async def test_legal_kb_relation_update_endpoint_calls_review_service(client, monkeypatch):
     calls: list[dict[str, str | None]] = []
 
     async def fake_update_relation_proposal(_session, **kwargs):
@@ -1134,10 +1148,10 @@ async def test_kb_v2_relation_update_endpoint_calls_review_service(client, monke
             created_at=datetime(2026, 7, 3, tzinfo=UTC),
         )
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.update_relation_proposal", fake_update_relation_proposal)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.update_relation_proposal", fake_update_relation_proposal)
 
     response = await client.patch(
-        "/api/v1/admin/kb-v2/relations/rel-v2",
+        "/api/v1/admin/legal-kb/relations/rel-v2",
         json={
             "target_document_id": "target-doc",
             "relation_type": "amends",
@@ -1166,7 +1180,8 @@ async def test_kb_v2_relation_update_endpoint_calls_review_service(client, monke
 @pytest.mark.asyncio
 async def test_create_relation_rejects_self_reference(monkeypatch):
     from fastapi import HTTPException
-    from src.kb_v2 import review as review_service
+
+    from src.legal_kb import review as review_service
 
     document = SimpleNamespace(document_id="doc-v2", outgoing_relations=[])
     bundle = SimpleNamespace(document=document)
@@ -1192,14 +1207,14 @@ async def test_create_relation_rejects_self_reference(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_relation_delete_endpoint_calls_review_service(client, monkeypatch):
+async def test_legal_kb_relation_delete_endpoint_calls_review_service(client, monkeypatch):
     calls = []
 
     async def fake_delete_relation(_session, **kwargs):
         calls.append(kwargs)
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.delete_relation", fake_delete_relation)
-    response = await client.delete("/api/v1/admin/kb-v2/relations/rel-v2")
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.delete_relation", fake_delete_relation)
+    response = await client.delete("/api/v1/admin/legal-kb/relations/rel-v2")
 
     assert response.status_code == 204
     assert calls == [
@@ -1213,7 +1228,8 @@ async def test_kb_v2_relation_delete_endpoint_calls_review_service(client, monke
 @pytest.mark.asyncio
 async def test_create_relation_rejects_duplicate(monkeypatch):
     from fastapi import HTTPException
-    from src.kb_v2 import review as review_service
+
+    from src.legal_kb import review as review_service
 
     target = SimpleNamespace(document_id="doc-target")
     document = SimpleNamespace(
@@ -1243,7 +1259,7 @@ async def test_create_relation_rejects_duplicate(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_reset_node_review_endpoint_calls_review_service(client, monkeypatch):
+async def test_legal_kb_reset_node_review_endpoint_calls_review_service(client, monkeypatch):
     calls: list[dict[str, str | None]] = []
 
     async def fake_reset_canonical_node_review(_session, **kwargs):
@@ -1261,10 +1277,10 @@ async def test_kb_v2_reset_node_review_endpoint_calls_review_service(client, mon
             structured_content={"chunk_type": "table"},
         )
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.reset_canonical_node_review", fake_reset_canonical_node_review)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.reset_canonical_node_review", fake_reset_canonical_node_review)
 
     response = await client.post(
-        "/api/v1/admin/kb-v2/nodes/node-v2/reset-review",
+        "/api/v1/admin/legal-kb/nodes/node-v2/reset-review",
         json={"note": "Hoan tac de review lai theo nhom"},
     )
 
@@ -1280,7 +1296,7 @@ async def test_kb_v2_reset_node_review_endpoint_calls_review_service(client, mon
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_bulk_risky_review_endpoint_returns_revision_detail(client, monkeypatch):
+async def test_legal_kb_bulk_risky_review_endpoint_returns_revision_detail(client, monkeypatch):
     calls: list[dict[str, str | None]] = []
 
     async def fake_bulk_review_risky_nodes(_session, **kwargs):
@@ -1321,11 +1337,11 @@ async def test_kb_v2_bulk_risky_review_endpoint_returns_revision_detail(client, 
             summary=None,
         )
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.bulk_review_risky_nodes", fake_bulk_review_risky_nodes)
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.collect_publish_blockers", lambda _bundle: [])
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.bulk_review_risky_nodes", fake_bulk_review_risky_nodes)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.collect_publish_blockers", lambda _bundle: [])
 
     response = await client.post(
-        "/api/v1/admin/kb-v2/revisions/rev-v2/risky-nodes/bulk-review",
+        "/api/v1/admin/legal-kb/revisions/rev-v2/risky-nodes/bulk-review",
         json={"node_type": "table", "mode": "review_only", "note": "Duyet theo nhom"},
     )
 
@@ -1343,10 +1359,10 @@ async def test_kb_v2_bulk_risky_review_endpoint_returns_revision_detail(client, 
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_admin_source_download_serves_suspended_revision_source(client, tmp_path, monkeypatch):
+async def test_legal_kb_admin_source_download_serves_suspended_revision_source(client, tmp_path, monkeypatch):
     source_file = tmp_path / "fresh.docx"
     source_file.write_bytes(b"admin-source")
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.settings.KB_LOCAL_STORAGE_PATH", str(tmp_path))
 
     async def fake_load_revision_bundle(_session, revision_id: str):
         assert revision_id == "rev-v2"
@@ -1357,9 +1373,9 @@ async def test_kb_v2_admin_source_download_serves_suspended_revision_source(clie
             )
         )
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2.load_revision_bundle", fake_load_revision_bundle)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb.load_revision_bundle", fake_load_revision_bundle)
 
-    response = await client.get("/api/v1/admin/kb-v2/revisions/rev-v2/source")
+    response = await client.get("/api/v1/admin/legal-kb/revisions/rev-v2/source")
 
     assert response.status_code == 200
     assert response.content == b"admin-source"
@@ -1367,7 +1383,7 @@ async def test_kb_v2_admin_source_download_serves_suspended_revision_source(clie
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_update_published_document_metadata_endpoint(client, monkeypatch):
+async def test_legal_kb_update_published_document_metadata_endpoint(client, monkeypatch):
     class _Session:
         def __init__(self):
             self.added = []
@@ -1438,11 +1454,11 @@ async def test_kb_v2_update_published_document_metadata_endpoint(client, monkeyp
         assert document_id == "doc-v2"
         return bundle
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2._load_managed_document_bundle", fake_load_managed_document_bundle)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb._load_managed_document_bundle", fake_load_managed_document_bundle)
     app.dependency_overrides[get_session] = override_session
     try:
         response = await client.patch(
-            "/api/v1/admin/kb-v2/documents/doc-v2",
+            "/api/v1/admin/legal-kb/documents/doc-v2",
             json={
                 "title": "Van ban moi",
                 "source_url": "https://example.test/new.docx",
@@ -1462,7 +1478,7 @@ async def test_kb_v2_update_published_document_metadata_endpoint(client, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_update_published_document_status_endpoint(client, monkeypatch):
+async def test_legal_kb_update_published_document_status_endpoint(client, monkeypatch):
     class _Session:
         def __init__(self):
             self.added = []
@@ -1491,7 +1507,7 @@ async def test_kb_v2_update_published_document_status_endpoint(client, monkeypat
         citation_label="Điều 1",
         embedding_model=None,
         embedding_version=None,
-        index_version="kb_v2_v1",
+        index_version="legal_kb_v1",
         created_at=datetime(2026, 7, 2, tzinfo=UTC),
     )
     bundle = SimpleNamespace(
@@ -1535,11 +1551,11 @@ async def test_kb_v2_update_published_document_status_endpoint(client, monkeypat
         assert document_id == "doc-v2"
         return bundle
 
-    monkeypatch.setattr("src.api.v1.admin_kb_v2._load_managed_document_bundle", fake_load_managed_document_bundle)
+    monkeypatch.setattr("src.api.v1.admin_legal_kb._load_managed_document_bundle", fake_load_managed_document_bundle)
     app.dependency_overrides[get_session] = override_session
     try:
         response = await client.post(
-            "/api/v1/admin/kb-v2/documents/doc-v2/status",
+            "/api/v1/admin/legal-kb/documents/doc-v2/status",
             json={"status": "replaced", "replacement_document_id": "doc-new"},
         )
     finally:

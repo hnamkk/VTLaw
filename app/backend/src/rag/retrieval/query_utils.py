@@ -139,7 +139,7 @@ def is_explicit_document_lookup(query: str) -> bool:
 
 
 def semantic_document_scope_numbers(query: str) -> tuple[str, ...]:
-    """Scope well-known base-law questions to the correct KB v2 document.
+    """Scope well-known base-law questions to the correct kho văn bản document.
 
     Luật Đường bộ 2024 (35/2024/QH15) and Luật Trật tự, an toàn giao thông
     đường bộ 2024 (36/2024/QH15) are semantically close. These rules only fire

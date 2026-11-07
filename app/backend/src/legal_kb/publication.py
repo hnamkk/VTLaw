@@ -10,21 +10,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import NO_VALUE
 
 from src.core.config import settings
-from src.kb_v2.metadata import normalize_document_role
-from src.kb_v2.retrieval_units import (
+from src.legal_kb.metadata import normalize_document_role
+from src.legal_kb.retrieval_units import (
     RISKY_NODE_TYPES_REQUIRING_ANSWERABILITY_DECISION,
     build_retrieval_units,
     citation_mismatches_for_nodes,
     node_is_answerable,
 )
-from src.kb_v2.review import (
+from src.legal_kb.review import (
     apply_approved_metadata_to_document,
     apply_approved_metadata_values,
     load_revision_bundle,
     normalize_legacy_revision_review_state,
     relation_review_status,
 )
-from src.models.kb_v2 import KbV2DocumentRevision, KbV2RetrievalUnit, KbV2ReviewEvent
+from src.models.legal_kb import LegalKbRevision, LegalKbRetrievalUnit, LegalKbReviewEvent
 
 REQUIRED_METADATA_FIELDS = (
     "title",
@@ -67,7 +67,7 @@ async def publish_revision(
         if bundle.revision.review_status != "approved":
             bundle.revision.review_status = "approved"
             session.add(
-                KbV2ReviewEvent(
+                LegalKbReviewEvent(
                     review_event_id=_uuid(),
                     document_id=bundle.document.document_id,
                     revision_id=bundle.revision.revision_id,
@@ -103,7 +103,7 @@ async def publish_revision(
         apply_approved_metadata_to_document(bundle)
 
         await session.execute(
-            delete(KbV2RetrievalUnit).where(KbV2RetrievalUnit.revision_id == bundle.revision.revision_id)
+            delete(LegalKbRetrievalUnit).where(LegalKbRetrievalUnit.revision_id == bundle.revision.revision_id)
         )
         for retrieval_unit in generated.units:
             session.add(retrieval_unit)
@@ -113,7 +113,7 @@ async def publish_revision(
         bundle.revision.review_status = "approved"
         bundle.document.legal_status = _published_legal_status(bundle.document)
         session.add(
-            KbV2ReviewEvent(
+            LegalKbReviewEvent(
                 review_event_id=_uuid(),
                 document_id=bundle.document.document_id,
                 revision_id=bundle.revision.revision_id,
@@ -136,19 +136,19 @@ async def publish_revision(
 
 async def _archive_previous_repository_revisions(session: AsyncSession, bundle) -> None:
     await session.execute(
-        update(KbV2DocumentRevision)
+        update(LegalKbRevision)
         .where(
-            KbV2DocumentRevision.document_id == bundle.document.document_id,
-            KbV2DocumentRevision.revision_id != bundle.revision.revision_id,
-            KbV2DocumentRevision.publication_status.in_(("published", "suspended")),
+            LegalKbRevision.document_id == bundle.document.document_id,
+            LegalKbRevision.revision_id != bundle.revision.revision_id,
+            LegalKbRevision.publication_status.in_(("published", "suspended")),
         )
         .values(publication_status="archived")
     )
     await session.execute(
-        update(KbV2RetrievalUnit)
+        update(LegalKbRetrievalUnit)
         .where(
-            KbV2RetrievalUnit.document_id == bundle.document.document_id,
-            KbV2RetrievalUnit.revision_id != bundle.revision.revision_id,
+            LegalKbRetrievalUnit.document_id == bundle.document.document_id,
+            LegalKbRetrievalUnit.revision_id != bundle.revision.revision_id,
         )
         .values(answerable_status="historical")
     )
@@ -182,7 +182,7 @@ async def suspend_revision(
         retrieval_unit.answerable_status = "suspended"
 
     session.add(
-        KbV2ReviewEvent(
+        LegalKbReviewEvent(
             review_event_id=_uuid(),
             document_id=bundle.document.document_id,
             revision_id=bundle.revision.revision_id,
@@ -227,7 +227,7 @@ async def unsuspend_revision(
         )
 
     session.add(
-        KbV2ReviewEvent(
+        LegalKbReviewEvent(
             review_event_id=_uuid(),
             document_id=bundle.document.document_id,
             revision_id=bundle.revision.revision_id,
@@ -248,7 +248,7 @@ def collect_publish_blockers(bundle) -> list[str]:
         blockers.append("Missing source asset checksum.")
     if settings.KB_REQUIRE_OBJECT_STORAGE and bundle.source_asset is not None:
         if bundle.source_asset.metadata_json.get("storage_backend") != "object":
-            blockers.append("Object storage is required for KB v2 source assets.")
+            blockers.append("Object storage is required for kho văn bản source assets.")
     if bundle.revision.ingestion_status != "parsed":
         blockers.append("Revision parsing is incomplete or failed.")
 

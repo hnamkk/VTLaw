@@ -8,8 +8,8 @@ from langchain_openai import ChatOpenAI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.kb_v2.evidence import assemble_evidence_bundle
-from src.models.kb_v2 import KbV2DocumentRevision, KbV2StandardSummary
+from src.legal_kb.evidence import assemble_evidence_bundle
+from src.models.legal_kb import LegalKbRevision, LegalKbSummary
 from src.rag.embedding import embed_query
 from src.rag.prompts import (
     INSUFFICIENT_CONTEXT_TEMPLATE,
@@ -19,9 +19,9 @@ from src.rag.prompts import (
 )
 from src.rag.reranking import rerank_chunks
 from src.rag.retrieval.context_packer import format_context, pack_context
-from src.rag.retrieval.hybrid_v2 import (
+from src.rag.retrieval.hybrid_legal import (
     future_effective_notice_for_query,
-    hybrid_retrieve_v2,
+    hybrid_retrieve_legal,
     related_document_ids,
 )
 from src.rag.retrieval.query_utils import expand_query_for_retrieval, query_for_local_ranking
@@ -46,19 +46,19 @@ async def get_standard_summary(
     session: AsyncSession,
     *,
     document_id: str,
-) -> KbV2StandardSummary:
+) -> LegalKbSummary:
     stmt = (
-        select(KbV2StandardSummary)
+        select(LegalKbSummary)
         .join(
-            KbV2DocumentRevision,
-            KbV2DocumentRevision.revision_id == KbV2StandardSummary.revision_id,
+            LegalKbRevision,
+            LegalKbRevision.revision_id == LegalKbSummary.revision_id,
         )
         .where(
-            KbV2StandardSummary.document_id == document_id,
-            KbV2StandardSummary.review_status == "approved",
-            KbV2DocumentRevision.publication_status == "published",
+            LegalKbSummary.document_id == document_id,
+            LegalKbSummary.review_status == "approved",
+            LegalKbRevision.publication_status == "published",
         )
-        .order_by(KbV2DocumentRevision.created_at.desc())
+        .order_by(LegalKbRevision.created_at.desc())
         .limit(1)
     )
     summary = await session.scalar(stmt)
@@ -81,7 +81,7 @@ async def build_dynamic_summary(
     document_scope = await related_document_ids(session, document_id=document_id)
     retrieval_query = expand_query_for_retrieval(prompt)
     query_embedding = await embed_query(retrieval_query)
-    retrieval = await hybrid_retrieve_v2(
+    retrieval = await hybrid_retrieve_legal(
         session,
         prompt,
         query_embedding,

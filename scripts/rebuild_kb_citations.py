@@ -17,16 +17,16 @@ from sqlalchemy import delete, select  # noqa: E402
 from sqlalchemy.orm import selectinload  # noqa: E402
 
 from src.db.session import async_session_factory  # noqa: E402
-from src.kb_v2.retrieval_units import (  # noqa: E402
+from src.legal_kb.retrieval_units import (  # noqa: E402
     build_retrieval_units,
     citation_label_for_node,
     citation_mismatch_for_unit,
     node_is_answerable,
 )
-from src.models.kb_v2 import (  # noqa: E402
-    KbV2DocumentRevision,
-    KbV2RetrievalUnit,
-    KbV2ReviewEvent,
+from src.models.legal_kb import (  # noqa: E402
+    LegalKbRevision,
+    LegalKbRetrievalUnit,
+    LegalKbReviewEvent,
 )
 
 
@@ -87,23 +87,23 @@ async def _load_revisions(
     document_numbers: set[str],
     revision_ids: set[str],
     include_drafts: bool,
-) -> list[KbV2DocumentRevision]:
+) -> list[LegalKbRevision]:
     async with async_session_factory() as session:
         stmt = (
-            select(KbV2DocumentRevision)
+            select(LegalKbRevision)
             .options(
-                selectinload(KbV2DocumentRevision.document),
-                selectinload(KbV2DocumentRevision.canonical_nodes),
-                selectinload(KbV2DocumentRevision.retrieval_units).selectinload(
-                    KbV2RetrievalUnit.canonical_node
+                selectinload(LegalKbRevision.document),
+                selectinload(LegalKbRevision.canonical_nodes),
+                selectinload(LegalKbRevision.retrieval_units).selectinload(
+                    LegalKbRetrievalUnit.canonical_node
                 ),
             )
-            .order_by(KbV2DocumentRevision.created_at)
+            .order_by(LegalKbRevision.created_at)
         )
         if not include_drafts:
-            stmt = stmt.where(KbV2DocumentRevision.publication_status.in_(("published", "suspended")))
+            stmt = stmt.where(LegalKbRevision.publication_status.in_(("published", "suspended")))
         if revision_ids:
-            stmt = stmt.where(KbV2DocumentRevision.revision_id.in_(revision_ids))
+            stmt = stmt.where(LegalKbRevision.revision_id.in_(revision_ids))
         result = await session.execute(stmt)
         revisions = list(result.scalars().unique().all())
         if document_numbers:
@@ -116,7 +116,7 @@ async def _load_revisions(
         return revisions
 
 
-def _audit_revision(revision: KbV2DocumentRevision) -> tuple[int, int, int, int]:
+def _audit_revision(revision: LegalKbRevision) -> tuple[int, int, int, int]:
     parent_map = {node.node_id: node for node in revision.canonical_nodes}
     expected_by_node_id = {
         node.node_id: citation_label_for_node(node=node, parent_map=parent_map)
@@ -163,13 +163,13 @@ async def rebuild_citations(
     async with async_session_factory() as session:
         for loaded_revision in revisions:
             revision = await session.get(
-                KbV2DocumentRevision,
+                LegalKbRevision,
                 loaded_revision.revision_id,
                 options=[
-                    selectinload(KbV2DocumentRevision.document),
-                    selectinload(KbV2DocumentRevision.canonical_nodes),
-                    selectinload(KbV2DocumentRevision.retrieval_units).selectinload(
-                        KbV2RetrievalUnit.canonical_node
+                    selectinload(LegalKbRevision.document),
+                    selectinload(LegalKbRevision.canonical_nodes),
+                    selectinload(LegalKbRevision.retrieval_units).selectinload(
+                        LegalKbRetrievalUnit.canonical_node
                     ),
                 ],
             )
@@ -191,14 +191,14 @@ async def rebuild_citations(
                     skipped_reason = "Không sinh được retrieval unit dùng cho hỏi đáp."
                 else:
                     await session.execute(
-                        delete(KbV2RetrievalUnit).where(
-                            KbV2RetrievalUnit.revision_id == revision.revision_id
+                        delete(LegalKbRetrievalUnit).where(
+                            LegalKbRetrievalUnit.revision_id == revision.revision_id
                         )
                     )
                     for unit in generated.units:
                         session.add(unit)
                     session.add(
-                        KbV2ReviewEvent(
+                        LegalKbReviewEvent(
                             review_event_id=str(uuid4()),
                             document_id=revision.document_id,
                             revision_id=revision.revision_id,
@@ -207,7 +207,7 @@ async def rebuild_citations(
                             decision="updated",
                             actor_user_id=None,
                             details={
-                                "action": "rebuild_kb_v2_citations",
+                                "action": "rebuild_legal_kb_citations",
                                 "retrieval_units": len(generated.units),
                                 "answerable_units": generated.answerable_count,
                                 "previous_mismatched_units": mismatched_units,

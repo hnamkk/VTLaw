@@ -58,7 +58,7 @@ def test_input_guardrail_redirects_legal_strategy_question():
     assert decision.allowed is False
     assert decision.stage == "input"
     assert decision.reason == "legal_advice_boundary"
-    assert "khong the dua ra khuyen nghi chien luoc phap ly" in decision.safe_response.lower()
+    assert "không thể đưa ra khuyến nghị chiến lược pháp lý" in decision.safe_response.lower()
 
 
 def test_input_guardrail_keeps_objective_procedure_question_allowed():

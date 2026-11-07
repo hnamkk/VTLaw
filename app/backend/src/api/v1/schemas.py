@@ -163,7 +163,7 @@ class DocumentsResponse(BaseModel):
     page_size: int
 
 
-class KbV2DocumentSummaryOut(BaseModel):
+class LegalKbDocumentSummaryOut(BaseModel):
     document_id: str
     revision_id: str
     summary_type: Literal["standard", "dynamic"]
@@ -174,12 +174,12 @@ class KbV2DocumentSummaryOut(BaseModel):
     related_document_ids: list[str] = Field(default_factory=list)
 
 
-class KbV2DynamicSummaryRequest(BaseModel):
+class LegalKbDynamicSummaryRequest(BaseModel):
     prompt: str = Field(min_length=3, max_length=1000)
     query_date: date_type | None = None
 
 
-class KbV2PublicDocumentDetailOut(BaseModel):
+class LegalKbPublicDocumentDetailOut(BaseModel):
     document_id: str
     revision_id: str
     title: str | None = None
@@ -196,7 +196,7 @@ class KbV2PublicDocumentDetailOut(BaseModel):
     viewer_warning: str
 
 
-class KbV2HistoricalCitationOut(BaseModel):
+class LegalKbHistoricalCitationOut(BaseModel):
     retrieval_unit_id: str
     document_id: str
     revision_id: str
@@ -444,7 +444,7 @@ class AssetReviewRequest(BaseModel):
     reviewed_by: str | None = None
 
 
-class KbV2DocumentOut(BaseModel):
+class LegalKbDocumentOut(BaseModel):
     document_id: str
     title: str | None = None
     document_number: str | None = None
@@ -457,7 +457,7 @@ class KbV2DocumentOut(BaseModel):
     metadata_json: dict = Field(default_factory=dict)
 
 
-class KbV2RevisionOut(BaseModel):
+class LegalKbRevisionOut(BaseModel):
     revision_id: str
     document_id: str
     revision_number: int
@@ -472,7 +472,7 @@ class KbV2RevisionOut(BaseModel):
     uploaded_at: datetime
 
 
-class KbV2SourceAssetOut(BaseModel):
+class LegalKbSourceAssetOut(BaseModel):
     asset_id: str
     document_id: str
     revision_id: str | None = None
@@ -487,7 +487,7 @@ class KbV2SourceAssetOut(BaseModel):
     source_note: str | None = None
 
 
-class KbV2CanonicalNodeOut(BaseModel):
+class LegalKbNodeOut(BaseModel):
     node_id: str
     revision_id: str
     parent_id: str | None = None
@@ -500,7 +500,7 @@ class KbV2CanonicalNodeOut(BaseModel):
     structured_content: dict = Field(default_factory=dict)
 
 
-class KbV2MetadataProposalOut(BaseModel):
+class LegalKbMetadataProposalOut(BaseModel):
     proposal_id: str
     document_id: str
     revision_id: str
@@ -516,7 +516,7 @@ class KbV2MetadataProposalOut(BaseModel):
     created_at: datetime | None = None
 
 
-class KbV2DocumentRelationOut(BaseModel):
+class LegalKbRelationOut(BaseModel):
     relation_id: str
     source_document_id: str
     target_document_id: str
@@ -528,7 +528,7 @@ class KbV2DocumentRelationOut(BaseModel):
     created_at: datetime | None = None
 
 
-class KbV2StandardSummaryOut(BaseModel):
+class LegalKbSummaryOut(BaseModel):
     summary_id: str
     document_id: str
     revision_id: str
@@ -538,7 +538,7 @@ class KbV2StandardSummaryOut(BaseModel):
     approved_at: datetime | None = None
 
 
-class KbV2RetrievalUnitOut(BaseModel):
+class LegalKbRetrievalUnitOut(BaseModel):
     retrieval_unit_id: str
     canonical_node_id: str
     document_id: str
@@ -550,7 +550,7 @@ class KbV2RetrievalUnitOut(BaseModel):
     index_version: str | None = None
 
 
-class KbV2ReviewEventOut(BaseModel):
+class LegalKbReviewEventOut(BaseModel):
     review_event_id: str
     document_id: str
     revision_id: str | None = None
@@ -562,65 +562,65 @@ class KbV2ReviewEventOut(BaseModel):
     created_at: datetime | None = None
 
 
-class KbV2RevisionDetailResponse(BaseModel):
-    document: KbV2DocumentOut
-    revision: KbV2RevisionOut
-    source_asset: KbV2SourceAssetOut | None = None
-    canonical_nodes: list[KbV2CanonicalNodeOut] = Field(default_factory=list)
-    metadata_proposals: list[KbV2MetadataProposalOut] = Field(default_factory=list)
-    relations: list[KbV2DocumentRelationOut] = Field(default_factory=list)
-    summary: KbV2StandardSummaryOut | None = None
-    retrieval_units: list[KbV2RetrievalUnitOut] = Field(default_factory=list)
-    review_events: list[KbV2ReviewEventOut] = Field(default_factory=list)
+class LegalKbRevisionDetailResponse(BaseModel):
+    document: LegalKbDocumentOut
+    revision: LegalKbRevisionOut
+    source_asset: LegalKbSourceAssetOut | None = None
+    canonical_nodes: list[LegalKbNodeOut] = Field(default_factory=list)
+    metadata_proposals: list[LegalKbMetadataProposalOut] = Field(default_factory=list)
+    relations: list[LegalKbRelationOut] = Field(default_factory=list)
+    summary: LegalKbSummaryOut | None = None
+    retrieval_units: list[LegalKbRetrievalUnitOut] = Field(default_factory=list)
+    review_events: list[LegalKbReviewEventOut] = Field(default_factory=list)
     publish_blockers: list[str] = Field(default_factory=list)
-    pending_metadata: list[KbV2MetadataProposalOut] = Field(default_factory=list)
-    pending_relations: list[KbV2DocumentRelationOut] = Field(default_factory=list)
-    pending_risky_nodes: list[KbV2CanonicalNodeOut] = Field(default_factory=list)
-    resolved_risky_nodes: list[KbV2CanonicalNodeOut] = Field(default_factory=list)
+    pending_metadata: list[LegalKbMetadataProposalOut] = Field(default_factory=list)
+    pending_relations: list[LegalKbRelationOut] = Field(default_factory=list)
+    pending_risky_nodes: list[LegalKbNodeOut] = Field(default_factory=list)
+    resolved_risky_nodes: list[LegalKbNodeOut] = Field(default_factory=list)
     resolved_risky_count: int = 0
     risky_reference_only_count: int = 0
     risky_answerable_count: int = 0
     is_ready_to_publish: bool = False
 
 
-class KbV2UploadResponse(BaseModel):
-    document: KbV2DocumentOut
-    revision: KbV2RevisionOut
-    source_asset: KbV2SourceAssetOut
+class LegalKbUploadResponse(BaseModel):
+    document: LegalKbDocumentOut
+    revision: LegalKbRevisionOut
+    source_asset: LegalKbSourceAssetOut
     parser_confidence: float
     parser_warnings: list[str] = Field(default_factory=list)
-    canonical_nodes: list[KbV2CanonicalNodeOut] = Field(default_factory=list)
+    canonical_nodes: list[LegalKbNodeOut] = Field(default_factory=list)
 
 
-class KbV2MetadataProposalCreateRequest(BaseModel):
+class LegalKbMetadataProposalCreateRequest(BaseModel):
     field_name: str = Field(min_length=2, max_length=64)
     proposed_value: str = Field(min_length=1, max_length=5000)
     note: str | None = Field(default=None, max_length=5000)
 
 
-class KbV2ProposalReviewRequest(BaseModel):
+class LegalKbProposalReviewRequest(BaseModel):
     decision: Literal["approved", "rejected"]
     note: str | None = Field(default=None, max_length=5000)
     proposed_value: str | None = Field(default=None, min_length=1, max_length=5000)
 
 
-class KbV2NodeReviewRequest(BaseModel):
+class LegalKbNodeReviewRequest(BaseModel):
     decision: Literal["approved", "rejected"]
     note: str | None = Field(default=None, max_length=5000)
     answerable: bool | None = None
 
 
-class KbV2NodeResetReviewRequest(BaseModel):
+class LegalKbNodeResetReviewRequest(BaseModel):
     note: str | None = Field(default=None, max_length=5000)
 
 
-class KbV2RiskyNodeBulkReviewRequest(BaseModel):
+class LegalKbRiskyNodeBulkReviewRequest(BaseModel):
     node_type: Literal["table", "appendix", "form", "image_caption"]
     mode: Literal["answerable", "review_only", "reset", "rejected"]
     note: str | None = Field(default=None, max_length=5000)
 
 
-class KbV2RelationCreateRequest(BaseModel):
+class LegalKbRelationCreateRequest(BaseModel):
     target_document_id: str
     relation_type: Literal["amends", "supplements", "replaces", "annuls", "guides", "depends_on"]
     source_locator: str | None = Field(default=None, max_length=255)
@@ -628,12 +628,12 @@ class KbV2RelationCreateRequest(BaseModel):
     note: str | None = Field(default=None, max_length=5000)
 
 
-class KbV2RelationReviewRequest(BaseModel):
+class LegalKbRelationReviewRequest(BaseModel):
     decision: Literal["approved", "rejected"]
     note: str | None = Field(default=None, max_length=5000)
 
 
-class KbV2RelationUpdateRequest(BaseModel):
+class LegalKbRelationUpdateRequest(BaseModel):
     target_document_id: str | None = None
     relation_type: Literal["amends", "supplements", "replaces", "annuls", "guides", "depends_on"] | None = None
     source_locator: str | None = Field(default=None, max_length=255)
@@ -641,16 +641,16 @@ class KbV2RelationUpdateRequest(BaseModel):
     note: str | None = Field(default=None, max_length=5000)
 
 
-class KbV2SummaryReviewRequest(BaseModel):
+class LegalKbSummaryReviewRequest(BaseModel):
     decision: Literal["approved", "rejected"]
     content: str | None = Field(default=None, max_length=8000)
 
 
-class KbV2SuspendRequest(BaseModel):
+class LegalKbSuspendRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=5000)
 
 
-class KbV2RevisionListItemOut(BaseModel):
+class LegalKbRevisionListItemOut(BaseModel):
     revision_id: str
     document_id: str
     title: str | None = None
@@ -675,14 +675,14 @@ class KbV2RevisionListItemOut(BaseModel):
     updated_at: datetime | None = None
 
 
-class KbV2RevisionListResponse(BaseModel):
-    items: list[KbV2RevisionListItemOut]
+class LegalKbRevisionListResponse(BaseModel):
+    items: list[LegalKbRevisionListItemOut]
     total: int
     page: int
     page_size: int
 
 
-class KbV2PublishedDocumentListItemOut(BaseModel):
+class LegalKbPublishedDocumentListItemOut(BaseModel):
     document_id: str
     revision_id: str
     title: str | None = None
@@ -699,25 +699,25 @@ class KbV2PublishedDocumentListItemOut(BaseModel):
     relation_count: int = 0
 
 
-class KbV2PublishedDocumentListResponse(BaseModel):
-    items: list[KbV2PublishedDocumentListItemOut]
+class LegalKbPublishedDocumentListResponse(BaseModel):
+    items: list[LegalKbPublishedDocumentListItemOut]
     total: int
     page: int
     page_size: int
 
 
-class KbV2RelationTargetItemOut(BaseModel):
+class LegalKbRelationTargetItemOut(BaseModel):
     document_id: str
     title: str | None = None
     document_number: str | None = None
 
 
-class KbV2RelationTargetListResponse(BaseModel):
-    items: list[KbV2RelationTargetItemOut]
+class LegalKbRelationTargetListResponse(BaseModel):
+    items: list[LegalKbRelationTargetItemOut]
     total: int
 
 
-class KbV2PublishedDocumentUpdateRequest(BaseModel):
+class LegalKbPublishedDocumentUpdateRequest(BaseModel):
     title: str | None = Field(default=None, min_length=3, max_length=500)
     document_number: str | None = Field(default=None, max_length=120)
     document_type: str | None = Field(default=None, max_length=40)
@@ -732,14 +732,14 @@ class KbV2PublishedDocumentUpdateRequest(BaseModel):
     document_role: str | None = Field(default=None, max_length=40)
 
 
-class KbV2RevisionSourceUpdateRequest(BaseModel):
+class LegalKbRevisionSourceUpdateRequest(BaseModel):
     source_url: str | None = Field(default=None, max_length=1000)
     source_downloaded_at: date_type | None = None
     source_note: str | None = Field(default=None, max_length=5000)
     source_file_name: str | None = Field(default=None, max_length=255)
 
 
-class KbV2PublishedDocumentStatusRequest(BaseModel):
+class LegalKbPublishedDocumentStatusRequest(BaseModel):
     status: Literal["active", "suspended", "expired", "replaced", "annulled"]
     note: str | None = Field(default=None, max_length=5000)
     replacement_document_id: str | None = None

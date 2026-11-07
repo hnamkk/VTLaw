@@ -1,4 +1,4 @@
-"""Add KB v2 review, proposal, and publish support.
+"""Add legal knowledge base review, proposal, and publish support.
 
 Revision ID: 0014_kb_v2_review_publish
 Revises: 0013_kb_v2_foundation

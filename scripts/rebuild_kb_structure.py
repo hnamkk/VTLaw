@@ -16,22 +16,22 @@ from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.orm import selectinload  # noqa: E402
 
 from src.db.session import async_session_factory  # noqa: E402
-from src.kb_v2.ingestion import _kb_v2_local_root  # noqa: E402
-from src.kb_v2.parser import build_canonical_nodes, parse_docx_into_artifacts  # noqa: E402
-from src.kb_v2.retrieval_units import (  # noqa: E402
+from src.legal_kb.ingestion import _legal_kb_local_root  # noqa: E402
+from src.legal_kb.parser import build_canonical_nodes, parse_docx_into_artifacts  # noqa: E402
+from src.legal_kb.retrieval_units import (  # noqa: E402
     _answerable_status,
     _content_hash,
     _embedding_text,
     citation_label_for_node,
     node_is_answerable,
 )
-from src.models.kb_v2 import (  # noqa: E402
-    KbV2AmendmentOperation,
-    KbV2CanonicalNode,
-    KbV2DocumentRevision,
-    KbV2ProvisionSource,
-    KbV2ReviewEvent,
-    KbV2SourceAsset,
+from src.models.legal_kb import (  # noqa: E402
+    LegalKbAmendmentOperation,
+    LegalKbNode,
+    LegalKbRevision,
+    LegalKbProvisionSource,
+    LegalKbReviewEvent,
+    LegalKbSourceAsset,
 )
 from src.rag.embedding import embed_texts  # noqa: E402
 
@@ -40,15 +40,15 @@ def _source_path(storage_uri: str) -> Path | None:
     if not storage_uri or "://" in storage_uri and not storage_uri.startswith("file:///"):
         return None
     path = Path(storage_uri.removeprefix("file:///"))
-    return path if path.is_absolute() else (_kb_v2_local_root() / path).resolve()
+    return path if path.is_absolute() else (_legal_kb_local_root() / path).resolve()
 
 
 def _map_projected_nodes(
-    existing: list[KbV2CanonicalNode],
-    projected: list[KbV2CanonicalNode],
-) -> tuple[dict[str, KbV2CanonicalNode], list[KbV2CanonicalNode]]:
-    mapped: dict[str, KbV2CanonicalNode] = {}
-    inserted: list[KbV2CanonicalNode] = []
+    existing: list[LegalKbNode],
+    projected: list[LegalKbNode],
+) -> tuple[dict[str, LegalKbNode], list[LegalKbNode]]:
+    mapped: dict[str, LegalKbNode] = {}
+    inserted: list[LegalKbNode] = []
     existing_index = 0
     for candidate in projected:
         if (
@@ -68,7 +68,7 @@ def _map_projected_nodes(
     return mapped, inserted
 
 
-def _review_state(existing: KbV2CanonicalNode, projected: KbV2CanonicalNode) -> tuple[str, dict]:
+def _review_state(existing: LegalKbNode, projected: LegalKbNode) -> tuple[str, dict]:
     structured = dict(projected.structured_content or {})
     old_structured = dict(existing.structured_content or {})
     if structured.get("review_only"):
@@ -84,35 +84,35 @@ def _review_state(existing: KbV2CanonicalNode, projected: KbV2CanonicalNode) -> 
 async def rebuild_revision(*, revision_id: str, apply: bool) -> dict:
     async with async_session_factory() as session:
         revision = await session.get(
-            KbV2DocumentRevision,
+            LegalKbRevision,
             revision_id,
             options=[
-                selectinload(KbV2DocumentRevision.document),
-                selectinload(KbV2DocumentRevision.canonical_nodes),
-                selectinload(KbV2DocumentRevision.retrieval_units),
+                selectinload(LegalKbRevision.document),
+                selectinload(LegalKbRevision.canonical_nodes),
+                selectinload(LegalKbRevision.retrieval_units),
             ],
         )
         if revision is None:
             raise RuntimeError("Không tìm thấy revision cần rebuild.")
-        source_asset = await session.get(KbV2SourceAsset, revision.source_asset_id)
+        source_asset = await session.get(LegalKbSourceAsset, revision.source_asset_id)
         source_path = _source_path(source_asset.storage_uri if source_asset else "")
         if source_path is None or not source_path.exists():
             raise RuntimeError("Không tìm thấy file nguồn cục bộ của revision.")
 
         dependent_sources = await session.scalar(
-            select(func.count()).select_from(KbV2ProvisionSource).where(
-                KbV2ProvisionSource.canonical_node_id.in_(
-                    select(KbV2CanonicalNode.node_id).where(
-                        KbV2CanonicalNode.revision_id == revision_id
+            select(func.count()).select_from(LegalKbProvisionSource).where(
+                LegalKbProvisionSource.canonical_node_id.in_(
+                    select(LegalKbNode.node_id).where(
+                        LegalKbNode.revision_id == revision_id
                     )
                 )
             )
         )
         dependent_operations = await session.scalar(
-            select(func.count()).select_from(KbV2AmendmentOperation).where(
-                KbV2AmendmentOperation.source_canonical_node_id.in_(
-                    select(KbV2CanonicalNode.node_id).where(
-                        KbV2CanonicalNode.revision_id == revision_id
+            select(func.count()).select_from(LegalKbAmendmentOperation).where(
+                LegalKbAmendmentOperation.source_canonical_node_id.in_(
+                    select(LegalKbNode.node_id).where(
+                        LegalKbNode.revision_id == revision_id
                     )
                 )
             )
@@ -208,14 +208,14 @@ async def rebuild_revision(*, revision_id: str, apply: bool) -> dict:
             for unit, vector in zip(missing_embedding_units, vectors, strict=True):
                 unit.embedding_vector = vector
                 unit.embedding_model = "text-embedding-3-small"
-                unit.embedding_version = "kb_v2_v1"
+                unit.embedding_version = "legal_kb_v1"
 
         report["new_answerable_units"] = sum(
             1 for unit in revision.retrieval_units if unit.answerable_status == "active"
         )
         report["embedded_units"] = len(missing_embedding_units)
         session.add(
-            KbV2ReviewEvent(
+            LegalKbReviewEvent(
                 review_event_id=str(uuid4()),
                 document_id=revision.document_id,
                 revision_id=revision_id,
@@ -223,7 +223,7 @@ async def rebuild_revision(*, revision_id: str, apply: bool) -> dict:
                 entity_id=revision_id,
                 decision="updated",
                 actor_user_id=None,
-                details={"action": "rebuild_kb_v2_structure", **report},
+                details={"action": "rebuild_legal_kb_structure", **report},
             )
         )
         await session.commit()

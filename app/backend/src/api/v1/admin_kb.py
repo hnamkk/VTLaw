@@ -1,7 +1,7 @@
 """Legacy admin queue module kept only for old-data maintenance and tests.
 
 This router is intentionally not mounted in the current application runtime.
-New admin workflows must use ``admin_kb_v2`` and the published-document
+New admin workflows must use ``admin_legal_kb`` and the published-document
 workspace.
 """
 

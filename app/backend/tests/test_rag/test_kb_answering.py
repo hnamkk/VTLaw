@@ -6,10 +6,10 @@ from types import SimpleNamespace
 import pytest
 
 from src.rag.agent.nodes import (
-    _get_kb_v2_published_document_by_number,
-    _kb_v2_document_lookup_response,
-    _kb_v2_effective_status_response,
-    _kb_v2_standard_summary_response,
+    _get_legal_kb_published_document_by_number,
+    _legal_kb_document_lookup_response,
+    _legal_kb_effective_status_response,
+    _legal_kb_standard_summary_response,
     deflect,
     hybrid_retrieve_node,
     inject_disclaimer,
@@ -21,12 +21,11 @@ from src.rag.agent.nodes import (
     verify_citation_node,
 )
 from src.rag.prompts import LEGAL_DISCLAIMER, QUERY_CLARIFICATION_TEMPLATE, SMALL_TALK_TEMPLATE
-from src.rag.retrieval import hybrid_v2 as hybrid_v2_module
+from src.rag.retrieval import hybrid_legal as hybrid_legal_module
 from src.schemas.rag import (
     Citation,
     RetrievedChunk,
     ScopeLabel,
-    ScopeResult,
     VerificationStatus,
 )
 
@@ -162,49 +161,49 @@ async def test_parse_query_clarifies_when_multiple_dates_are_present():
     assert result["query_has_explicit_date"] is True
 
 
-def test_kb_v2_retrieval_filters_only_current_answerable_units():
-    compiled = " ".join(str(condition) for condition in hybrid_v2_module._base_filters(date(2026, 7, 2)))
+def test_legal_kb_retrieval_filters_only_current_answerable_units():
+    compiled = " ".join(str(condition) for condition in hybrid_legal_module._base_filters(date(2026, 7, 2)))
 
-    assert "kb_v2_legal_documents.legal_status = :legal_status_1" in compiled
-    assert "kb_v2_retrieval_units.answerable_status = :answerable_status_1" in compiled
+    assert "legal_kb_legal_documents.legal_status = :legal_status_1" in compiled
+    assert "legal_kb_retrieval_units.answerable_status = :answerable_status_1" in compiled
     assert "answerable_status NOT IN" not in compiled
 
 
-def test_kb_v2_historical_filters_do_not_weaken_active_defaults():
+def test_legal_kb_historical_filters_do_not_weaken_active_defaults():
     active_compiled = " ".join(
-        str(condition) for condition in hybrid_v2_module._base_filters(date(2026, 7, 2))
+        str(condition) for condition in hybrid_legal_module._base_filters(date(2026, 7, 2))
     )
     historical_compiled = " ".join(
         str(condition)
-        for condition in hybrid_v2_module._base_filters(date(2026, 7, 2), mode="historical")
+        for condition in hybrid_legal_module._base_filters(date(2026, 7, 2), mode="historical")
     )
 
-    assert "kb_v2_legal_documents.legal_status = :legal_status_1" in active_compiled
-    assert "kb_v2_legal_documents.legal_status = :legal_status_1" not in historical_compiled
-    assert "kb_v2_document_revisions.publication_status IN" in historical_compiled
-    assert "kb_v2_retrieval_units.answerable_status IN" in historical_compiled
+    assert "legal_kb_legal_documents.legal_status = :legal_status_1" in active_compiled
+    assert "legal_kb_legal_documents.legal_status = :legal_status_1" not in historical_compiled
+    assert "legal_kb_document_revisions.publication_status IN" in historical_compiled
+    assert "legal_kb_retrieval_units.answerable_status IN" in historical_compiled
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_document_lookup_filters_only_active_documents():
+async def test_legal_kb_document_lookup_filters_only_active_documents():
     session = _CaptureScalarSession()
 
-    await _get_kb_v2_published_document_by_number(session, "67/2023/ND-CP")
+    await _get_legal_kb_published_document_by_number(session, "67/2023/ND-CP")
 
     compiled = str(session.statements[0])
-    assert "kb_v2_legal_documents.legal_status = :legal_status_1" in compiled
-    assert "kb_v2_legal_documents.legal_status !=" not in compiled
+    assert "legal_kb_legal_documents.legal_status = :legal_status_1" in compiled
+    assert "legal_kb_legal_documents.legal_status !=" not in compiled
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_standard_summary_filters_only_active_documents():
+async def test_legal_kb_standard_summary_filters_only_active_documents():
     session = _CaptureScalarSession()
 
-    await _kb_v2_standard_summary_response(session, "tom tat 67/2023/ND-CP")
+    await _legal_kb_standard_summary_response(session, "tom tat 67/2023/ND-CP")
 
     compiled = str(session.statements[0])
-    assert "kb_v2_legal_documents.legal_status = :legal_status_1" in compiled
-    assert "kb_v2_legal_documents.legal_status !=" not in compiled
+    assert "legal_kb_legal_documents.legal_status = :legal_status_1" in compiled
+    assert "legal_kb_legal_documents.legal_status !=" not in compiled
 
 
 @pytest.mark.asyncio
@@ -242,11 +241,11 @@ async def test_scope_classify_uses_resolved_follow_up_query(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_hybrid_retrieve_node_uses_kb_v2_when_flag_enabled(monkeypatch):
+async def test_hybrid_retrieve_node_uses_legal_kb_when_flag_enabled(monkeypatch):
     async def fake_embed_query(_query: str) -> list[float]:
         return [0.1, 0.2]
 
-    async def fake_hybrid_retrieve_v2(
+    async def fake_hybrid_retrieve_legal(
         _session,
         query: str,
         _embedding,
@@ -269,7 +268,7 @@ async def test_hybrid_retrieve_node_uses_kb_v2_when_flag_enabled(monkeypatch):
         lambda *_args, **_kwargs: _async_result(None),
     )
     monkeypatch.setattr("src.rag.agent.nodes.embed_query", fake_embed_query)
-    monkeypatch.setattr("src.rag.agent.nodes.hybrid_retrieve_v2", fake_hybrid_retrieve_v2)
+    monkeypatch.setattr("src.rag.agent.nodes.hybrid_retrieve_legal", fake_hybrid_retrieve_legal)
     monkeypatch.setattr(
         "src.rag.agent.nodes.future_effective_notice_for_query",
         fake_future_notice,
@@ -291,7 +290,7 @@ async def test_hybrid_retrieve_node_uses_kb_v2_when_flag_enabled(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_hybrid_retrieve_node_returns_kb_v2_standard_summary(monkeypatch):
+async def test_hybrid_retrieve_node_returns_legal_kb_standard_summary(monkeypatch):
     class _FakeDocument:
         document_id = "doc-35"
         title = "Luat Duong bo"
@@ -330,7 +329,7 @@ async def test_hybrid_retrieve_node_returns_kb_v2_standard_summary(monkeypatch):
     )
 
     assert result["retrieved_contexts"] == []
-    assert result["guardrail_reason"] == "kb_v2_standard_summary"
+    assert result["guardrail_reason"] == "legal_kb_standard_summary"
     assert result["final_response"] == "Tom tat chuan cua van ban 35/2024/QH15."
     assert result["response_document_sources"] == [
         {
@@ -353,7 +352,7 @@ async def test_hybrid_retrieve_node_does_not_fallback_when_standard_summary_miss
         lambda *_args, **_kwargs: _async_result(("doc-67",)),
     )
     monkeypatch.setattr(
-        "src.rag.agent.nodes._kb_v2_standard_summary_response",
+        "src.rag.agent.nodes._legal_kb_standard_summary_response",
         lambda *_args, **_kwargs: _async_result(None),
     )
     monkeypatch.setattr("src.rag.agent.nodes.embed_query", fail_embed_query)
@@ -369,7 +368,7 @@ async def test_hybrid_retrieve_node_does_not_fallback_when_standard_summary_miss
     )
 
     assert result["retrieved_contexts"] == []
-    assert result["guardrail_reason"] == "kb_v2_standard_summary"
+    assert result["guardrail_reason"] == "legal_kb_standard_summary"
     assert (
         result["final_response"]
         == "Xin lỗi, tôi chưa có bản tóm tắt chuẩn đã duyệt cho văn bản số hiệu 67/2023/ND-CP."
@@ -398,7 +397,7 @@ async def test_hybrid_retrieve_node_returns_simple_message_for_unknown_document_
     )
 
     assert result["retrieved_contexts"] == []
-    assert result["guardrail_reason"] == "kb_v2_document_not_found"
+    assert result["guardrail_reason"] == "legal_kb_document_not_found"
     assert (
         result["final_response"]
         == "Xin lỗi, tôi chưa tìm thấy văn bản số hiệu 999/2026/QH99 đang được công bố trong kho dữ liệu hiện tại."
@@ -422,11 +421,11 @@ async def test_hybrid_retrieve_node_returns_document_lookup_without_embedding(mo
         lambda *_args, **_kwargs: _async_result(("doc-36",)),
     )
     monkeypatch.setattr(
-        "src.rag.agent.nodes._kb_v2_document_lookup_response",
+        "src.rag.agent.nodes._legal_kb_document_lookup_response",
         lambda *_args, **_kwargs: _async_result("Van ban 36/2024/QH15 co tieu de ..."),
     )
     monkeypatch.setattr(
-        "src.rag.agent.nodes._get_kb_v2_published_document_bundle_by_number",
+        "src.rag.agent.nodes._get_legal_kb_published_document_bundle_by_number",
         lambda *_args, **_kwargs: _async_result(
             SimpleNamespace(document=_FakeDocument(), source_url="https://example.test/36")
         ),
@@ -446,7 +445,7 @@ async def test_hybrid_retrieve_node_returns_document_lookup_without_embedding(mo
     )
 
     assert result["retrieved_contexts"] == []
-    assert result["guardrail_reason"] == "kb_v2_document_lookup"
+    assert result["guardrail_reason"] == "legal_kb_document_lookup"
     assert result["final_response"] == "Van ban 36/2024/QH15 co tieu de ..."
     assert result["response_document_sources"] == [
         {
@@ -476,11 +475,11 @@ async def test_hybrid_retrieve_node_returns_effective_status_without_embedding(m
         lambda *_args, **_kwargs: _async_result(("doc-36",)),
     )
     monkeypatch.setattr(
-        "src.rag.agent.nodes._kb_v2_effective_status_response",
+        "src.rag.agent.nodes._legal_kb_effective_status_response",
         lambda *_args, **_kwargs: _async_result("Van ban 36/2024/QH15 hien dang co hieu luc."),
     )
     monkeypatch.setattr(
-        "src.rag.agent.nodes._get_kb_v2_published_document_bundle_by_number",
+        "src.rag.agent.nodes._get_legal_kb_published_document_bundle_by_number",
         lambda *_args, **_kwargs: _async_result(
             SimpleNamespace(document=_FakeDocument(), source_url="https://example.test/36")
         ),
@@ -500,7 +499,7 @@ async def test_hybrid_retrieve_node_returns_effective_status_without_embedding(m
     )
 
     assert result["retrieved_contexts"] == []
-    assert result["guardrail_reason"] == "kb_v2_effective_status"
+    assert result["guardrail_reason"] == "legal_kb_effective_status"
     assert result["final_response"] == "Van ban 36/2024/QH15 hien dang co hieu luc."
     assert result["response_document_sources"] == [
         {
@@ -528,7 +527,7 @@ async def test_hybrid_retrieve_node_summary_uses_current_query_when_history_has_
         "src.rag.agent.nodes._document_ids_for_explicit_refs",
         lambda *_args, **_kwargs: _async_result(("doc-36",)),
     )
-    monkeypatch.setattr("src.rag.agent.nodes._kb_v2_standard_summary_response", fake_standard_summary)
+    monkeypatch.setattr("src.rag.agent.nodes._legal_kb_standard_summary_response", fake_standard_summary)
     monkeypatch.setattr("src.rag.agent.nodes.embed_query", fail_embed_query)
 
     result = await hybrid_retrieve_node(
@@ -546,13 +545,13 @@ async def test_hybrid_retrieve_node_summary_uses_current_query_when_history_has_
 
 
 @pytest.mark.asyncio
-async def test_hybrid_retrieve_node_kb_v2_retrieval_uses_current_explicit_document(monkeypatch):
+async def test_hybrid_retrieve_node_legal_kb_retrieval_uses_current_explicit_document(monkeypatch):
     captured: dict[str, str] = {}
 
     async def fake_embed_query(_query: str) -> list[float]:
         return [0.1]
 
-    async def fake_hybrid_retrieve_v2(
+    async def fake_hybrid_retrieve_legal(
         _session,
         query: str,
         _embedding,
@@ -575,7 +574,7 @@ async def test_hybrid_retrieve_node_kb_v2_retrieval_uses_current_explicit_docume
         lambda *_args, **_kwargs: _async_result(("doc-36",)),
     )
     monkeypatch.setattr("src.rag.agent.nodes.embed_query", fake_embed_query)
-    monkeypatch.setattr("src.rag.agent.nodes.hybrid_retrieve_v2", fake_hybrid_retrieve_v2)
+    monkeypatch.setattr("src.rag.agent.nodes.hybrid_retrieve_legal", fake_hybrid_retrieve_legal)
     monkeypatch.setattr("src.rag.agent.nodes.future_effective_notice_for_query", fake_future_notice)
 
     result = await hybrid_retrieve_node(
@@ -617,11 +616,11 @@ async def test_hybrid_retrieve_node_returns_lifecycle_metadata_for_expired_docum
         lambda *_args, **_kwargs: _async_result(("doc-expired",)),
     )
     monkeypatch.setattr(
-        "src.rag.agent.nodes._kb_v2_effective_status_response",
+        "src.rag.agent.nodes._legal_kb_effective_status_response",
         lambda *_args, **_kwargs: _async_result(None),
     )
     monkeypatch.setattr(
-        "src.rag.agent.nodes._get_kb_v2_lifecycle_document_bundle_by_number",
+        "src.rag.agent.nodes._get_legal_kb_lifecycle_document_bundle_by_number",
         lambda *_args, **_kwargs: _async_result(
             SimpleNamespace(document=_FakeDocument(), source_url="https://example.test/expired")
         ),
@@ -649,7 +648,7 @@ async def test_hybrid_retrieve_node_returns_lifecycle_metadata_for_expired_docum
         config={"configurable": {"db_session": object()}},
     )
 
-    assert result["guardrail_reason"] == "kb_v2_effective_status"
+    assert result["guardrail_reason"] == "legal_kb_effective_status"
     assert result["status_filter"] == "historical"
     assert "01/07/2024" in result["final_response"]
     assert "44/2024/ND-CP - Van ban thay the" in result["final_response"]
@@ -701,7 +700,7 @@ async def test_hybrid_retrieve_node_returns_historical_direct_response(monkeypat
     async def fake_embed_query(_query: str) -> list[float]:
         return [0.3]
 
-    async def fake_hybrid_retrieve_v2(
+    async def fake_hybrid_retrieve_legal(
         _session,
         query: str,
         _embedding,
@@ -721,7 +720,7 @@ async def test_hybrid_retrieve_node_returns_historical_direct_response(monkeypat
         lambda *_args, **_kwargs: _async_result(("doc-h1",)),
     )
     monkeypatch.setattr("src.rag.agent.nodes.embed_query", fake_embed_query)
-    monkeypatch.setattr("src.rag.agent.nodes.hybrid_retrieve_v2", fake_hybrid_retrieve_v2)
+    monkeypatch.setattr("src.rag.agent.nodes.hybrid_retrieve_legal", fake_hybrid_retrieve_legal)
 
     result = await hybrid_retrieve_node(
         {
@@ -738,7 +737,7 @@ async def test_hybrid_retrieve_node_returns_historical_direct_response(monkeypat
 
     assert captured["mode"] == "historical"
     assert captured["query_date"] == date(2021, 6, 1)
-    assert result["guardrail_reason"] == "kb_v2_historical_lookup"
+    assert result["guardrail_reason"] == "legal_kb_historical_lookup"
     assert result["status_filter"] == "historical"
     assert "không phải căn cứ pháp lý hiện hành" in result["final_response"]
     assert result["response_historical_references"] == [
@@ -797,27 +796,27 @@ async def test_hybrid_retrieve_node_clarifies_when_historical_document_has_multi
     assert "31/12/2020" in result["final_response"]
 
 
-def test_kb_v2_extract_document_refs_supports_common_legal_numbers():
-    refs = hybrid_v2_module._extract_document_refs(
+def test_legal_kb_extract_document_refs_supports_common_legal_numbers():
+    refs = hybrid_legal_module._extract_document_refs(
         "Hoi 36/2024/QH15 va 67/2023/ND-CP, them 67/2023/N\u0110-CP."
     )
 
     assert refs == ("36/2024/QH15", "67/2023/ND-CP", "67/2023/N\u0110-CP")
 
 
-def test_kb_v2_raw_lookup_terms_preserves_vietnamese_terms():
-    terms = hybrid_v2_module._raw_lookup_terms("\u0110\u01b0\u1eddng cao t\u1ed1c l\u00e0 g\u00ec? M\u0169 b\u1ea3o hi\u1ec3m!")
+def test_legal_kb_raw_lookup_terms_normalizes_vietnamese_consistently():
+    terms = hybrid_legal_module._raw_lookup_terms("\u0110\u01b0\u1eddng cao t\u1ed1c l\u00e0 g\u00ec? M\u0169 b\u1ea3o hi\u1ec3m!")
 
-    assert "\u0111\u01b0\u1eddng" in terms
+    assert "duong" in terms
     assert "cao" in terms
-    assert "t\u1ed1c" in terms
-    assert "m\u0169" in terms
-    assert "b\u1ea3o" in terms
-    assert "hi\u1ec3m" in terms
+    assert "toc" in terms
+    assert "mu" in terms
+    assert "bao" in terms
+    assert "hiem" in terms
     assert "l\u00e0" not in terms
 
 
-def test_kb_v2_exact_match_score_prefers_term_coverage_over_single_term_hits():
+def test_legal_kb_exact_match_score_prefers_term_coverage_over_single_term_hits():
     from types import SimpleNamespace
 
     relevant = SimpleNamespace(
@@ -832,16 +831,16 @@ def test_kb_v2_exact_match_score_prefers_term_coverage_over_single_term_hits():
         doc_title="Lu\u1eadt Tr\u1eadt t\u1ef1, an to\u00e0n giao th\u00f4ng \u0111\u01b0\u1eddng b\u1ed9",
         document_number="36/2024/QH15",
     )
-    terms = hybrid_v2_module._raw_lookup_terms(
+    terms = hybrid_legal_module._raw_lookup_terms(
         "\u0110\u1ed9i m\u0169 b\u1ea3o hi\u1ec3m c\u00f3 b\u1eaft bu\u1ed9c kh\u00f4ng?"
     )
 
-    assert hybrid_v2_module._exact_match_score(relevant, terms, set()) > hybrid_v2_module._exact_match_score(
+    assert hybrid_legal_module._exact_match_score(relevant, terms, set()) > hybrid_legal_module._exact_match_score(
         weak, terms, set()
     )
 
 
-def test_kb_v2_exact_match_score_weights_body_over_metadata():
+def test_legal_kb_exact_match_score_weights_body_over_metadata():
     from types import SimpleNamespace
 
     body_match = SimpleNamespace(
@@ -856,15 +855,15 @@ def test_kb_v2_exact_match_score_weights_body_over_metadata():
         doc_title="Lu\u1eadt \u0110\u01b0\u1eddng b\u1ed9",
         document_number="35/2024/QH15",
     )
-    terms = hybrid_v2_module._raw_lookup_terms("\u0110\u01b0\u1eddng cao t\u1ed1c l\u00e0 g\u00ec?")
+    terms = hybrid_legal_module._raw_lookup_terms("\u0110\u01b0\u1eddng cao t\u1ed1c l\u00e0 g\u00ec?")
 
-    assert hybrid_v2_module._exact_match_score(body_match, terms, set()) > hybrid_v2_module._exact_match_score(
+    assert hybrid_legal_module._exact_match_score(body_match, terms, set()) > hybrid_legal_module._exact_match_score(
         metadata_only, terms, set()
     )
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_exact_search_uses_accented_terms_and_metadata_fields():
+async def test_legal_kb_exact_search_normalizes_both_terms_and_columns():
     captured = {}
 
     class _Result:
@@ -876,7 +875,7 @@ async def test_kb_v2_exact_search_uses_accented_terms_and_metadata_fields():
             captured["stmt"] = stmt
             return _Result()
 
-    await hybrid_v2_module._exact_search(
+    await hybrid_legal_module._exact_search(
         _Session(),
         query="\u0110\u01b0\u1eddng cao t\u1ed1c l\u00e0 g\u00ec?",
         query_date=date(2026, 7, 4),
@@ -888,14 +887,16 @@ async def test_kb_v2_exact_search_uses_accented_terms_and_metadata_fields():
     compiled = str(statement)
     params = statement.compile().params
     assert "citation_label" in compiled
-    assert "kb_v2_legal_documents.title" in compiled
-    assert params["term_0"] == "%\u0111\u01b0\u1eddng%"
+    assert "legal_kb_legal_documents.title" in compiled
+    assert "translate" in compiled
+    assert "ORDER BY" in compiled
+    assert params["term_0"] == "%duong%"
     assert params["term_1"] == "%cao%"
-    assert params["term_2"] == "%t\u1ed1c%"
+    assert params["term_2"] == "%toc%"
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_explicit_document_number_scopes_all_retrieval_branches(monkeypatch):
+async def test_legal_kb_explicit_document_number_scopes_all_retrieval_branches(monkeypatch):
     calls: list[tuple[str, tuple[str, ...] | None]] = []
 
     async def fake_resolve(_session, query: str):
@@ -906,24 +907,24 @@ async def test_kb_v2_explicit_document_number_scopes_all_retrieval_branches(monk
         calls.append((name, kwargs["document_ids"]))
         return []
 
-    monkeypatch.setattr(hybrid_v2_module, "_document_ids_for_explicit_refs", fake_resolve)
+    monkeypatch.setattr(hybrid_legal_module, "_document_ids_for_explicit_refs", fake_resolve)
     monkeypatch.setattr(
-        hybrid_v2_module,
+        hybrid_legal_module,
         "_vector_search",
         lambda *_args, **kwargs: fake_branch("vector", **kwargs),
     )
     monkeypatch.setattr(
-        hybrid_v2_module,
+        hybrid_legal_module,
         "_fts_search",
         lambda *_args, **kwargs: fake_branch("fts", **kwargs),
     )
     monkeypatch.setattr(
-        hybrid_v2_module,
+        hybrid_legal_module,
         "_exact_search",
         lambda *_args, **kwargs: fake_branch("exact", **kwargs),
     )
 
-    result = await hybrid_v2_module.hybrid_retrieve_v2(
+    result = await hybrid_legal_module.hybrid_retrieve_legal(
         session=object(),
         query="noi dung van ban 36/2024/QH15",
         query_embedding=[0.1],
@@ -939,7 +940,7 @@ async def test_kb_v2_explicit_document_number_scopes_all_retrieval_branches(monk
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_semantic_base_law_scope_limits_retrieval_branches(monkeypatch):
+async def test_legal_kb_topic_hint_does_not_exclude_other_active_sources(monkeypatch):
     calls: list[tuple[str, tuple[str, ...] | None]] = []
     resolver_queries: list[str] = []
 
@@ -953,24 +954,24 @@ async def test_kb_v2_semantic_base_law_scope_limits_retrieval_branches(monkeypat
         calls.append((name, kwargs["document_ids"]))
         return []
 
-    monkeypatch.setattr(hybrid_v2_module, "_document_ids_for_explicit_refs", fake_resolve)
+    monkeypatch.setattr(hybrid_legal_module, "_document_ids_for_explicit_refs", fake_resolve)
     monkeypatch.setattr(
-        hybrid_v2_module,
+        hybrid_legal_module,
         "_vector_search",
         lambda *_args, **kwargs: fake_branch("vector", **kwargs),
     )
     monkeypatch.setattr(
-        hybrid_v2_module,
+        hybrid_legal_module,
         "_fts_search",
         lambda *_args, **kwargs: fake_branch("fts", **kwargs),
     )
     monkeypatch.setattr(
-        hybrid_v2_module,
+        hybrid_legal_module,
         "_exact_search",
         lambda *_args, **kwargs: fake_branch("exact", **kwargs),
     )
 
-    result = await hybrid_v2_module.hybrid_retrieve_v2(
+    result = await hybrid_legal_module.hybrid_retrieve_legal(
         session=object(),
         query="Luật Đường bộ 2024 tập trung vào hạ tầng và vận tải đường bộ như thế nào?",
         query_embedding=[0.1],
@@ -978,28 +979,28 @@ async def test_kb_v2_semantic_base_law_scope_limits_retrieval_branches(monkeypat
     )
 
     assert result.chunks == []
-    assert resolver_queries[-1] == "35/2024/QH15"
+    assert len(resolver_queries) == 1
     assert calls == [
-        ("vector", ("doc-35",)),
-        ("fts", ("doc-35",)),
-        ("exact", ("doc-35",)),
+        ("vector", None),
+        ("fts", None),
+        ("exact", None),
     ]
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_unknown_explicit_document_number_does_not_search_all_corpus(monkeypatch):
+async def test_legal_kb_unknown_explicit_document_number_does_not_search_all_corpus(monkeypatch):
     async def fake_resolve(_session, _query: str):
         return ()
 
     async def fail_branch(**_kwargs):
         raise AssertionError("unknown explicit document number should not fallback to whole corpus")
 
-    monkeypatch.setattr(hybrid_v2_module, "_document_ids_for_explicit_refs", fake_resolve)
-    monkeypatch.setattr(hybrid_v2_module, "_vector_search", lambda *_args, **kwargs: fail_branch(**kwargs))
-    monkeypatch.setattr(hybrid_v2_module, "_fts_search", lambda *_args, **kwargs: fail_branch(**kwargs))
-    monkeypatch.setattr(hybrid_v2_module, "_exact_search", lambda *_args, **kwargs: fail_branch(**kwargs))
+    monkeypatch.setattr(hybrid_legal_module, "_document_ids_for_explicit_refs", fake_resolve)
+    monkeypatch.setattr(hybrid_legal_module, "_vector_search", lambda *_args, **kwargs: fail_branch(**kwargs))
+    monkeypatch.setattr(hybrid_legal_module, "_fts_search", lambda *_args, **kwargs: fail_branch(**kwargs))
+    monkeypatch.setattr(hybrid_legal_module, "_exact_search", lambda *_args, **kwargs: fail_branch(**kwargs))
 
-    result = await hybrid_v2_module.hybrid_retrieve_v2(
+    result = await hybrid_legal_module.hybrid_retrieve_legal(
         session=object(),
         query="noi dung van ban 999/2026/QH99",
         query_embedding=[0.1],
@@ -1132,8 +1133,8 @@ async def test_llm_generate_includes_complementary_role_notice_in_prompt():
 async def test_rerank_node_guides_penalty_questions_to_decree_with_direct_basis():
     result = await rerank_node(
         {
-            "query": "Khong doi mu bao hiem bi phat bao nhieu?",
-            "normalized_query": "Khong doi mu bao hiem bi phat bao nhieu?",
+            "query": "Xe may khong doi mu bao hiem bi phat bao nhieu?",
+            "normalized_query": "Xe may khong doi mu bao hiem bi phat bao nhieu?",
             "query_intent": "penalty",
             "retrieved_contexts": [
                 _chunk(
@@ -1153,6 +1154,7 @@ async def test_rerank_node_guides_penalty_questions_to_decree_with_direct_basis(
                     document_number="100/2019/ND-CP",
                     rerank_score=0.82,
                     article_num=7,
+                    text_snippet="Phạt tiền đối với người đi xe máy không đội mũ bảo hiểm.",
                 ),
             ],
         }
@@ -1253,6 +1255,7 @@ async def test_rerank_node_marks_multiple_possibilities_for_fact_dependent_near_
                     document_number="123/2021/ND-CP",
                     rerank_score=0.79,
                     article_num=12,
+                    text_snippet="Phạt tiền đối với xe khách đón khách sai nơi quy định.",
                 ),
             ],
         }
@@ -1324,77 +1327,77 @@ async def test_output_guardrail_preserves_evidence_policy_direct_responses():
 
 
 @pytest.mark.asyncio
-async def test_output_guardrail_preserves_kb_v2_standard_summary():
+async def test_output_guardrail_preserves_legal_kb_standard_summary():
     result = await output_guardrail_node(
         {
-            "guardrail_reason": "kb_v2_standard_summary",
+            "guardrail_reason": "legal_kb_standard_summary",
             "guardrail_stage": "retrieval",
             "final_response": "Tom tat chuan cua van ban 35/2024/QH15.",
         }
     )
 
     assert result["guardrail_triggered"] is True
-    assert result["guardrail_reason"] == "kb_v2_standard_summary"
+    assert result["guardrail_reason"] == "legal_kb_standard_summary"
 
 
 @pytest.mark.asyncio
-async def test_output_guardrail_preserves_kb_v2_document_not_found():
+async def test_output_guardrail_preserves_legal_kb_document_not_found():
     result = await output_guardrail_node(
         {
-            "guardrail_reason": "kb_v2_document_not_found",
+            "guardrail_reason": "legal_kb_document_not_found",
             "guardrail_stage": "retrieval",
             "final_response": "Xin lỗi, tôi chưa tìm thấy văn bản số hiệu 999/2026/QH99 đang được công bố trong kho dữ liệu hiện tại.",
         }
     )
 
     assert result["guardrail_triggered"] is True
-    assert result["guardrail_reason"] == "kb_v2_document_not_found"
+    assert result["guardrail_reason"] == "legal_kb_document_not_found"
 
 
 @pytest.mark.asyncio
-async def test_output_guardrail_preserves_kb_v2_document_lookup():
+async def test_output_guardrail_preserves_legal_kb_document_lookup():
     result = await output_guardrail_node(
         {
-            "guardrail_reason": "kb_v2_document_lookup",
+            "guardrail_reason": "legal_kb_document_lookup",
             "guardrail_stage": "retrieval",
             "final_response": "Van ban 36/2024/QH15 co tieu de ...",
         }
     )
 
     assert result["guardrail_triggered"] is True
-    assert result["guardrail_reason"] == "kb_v2_document_lookup"
+    assert result["guardrail_reason"] == "legal_kb_document_lookup"
 
 
 @pytest.mark.asyncio
-async def test_output_guardrail_preserves_kb_v2_effective_status():
+async def test_output_guardrail_preserves_legal_kb_effective_status():
     result = await output_guardrail_node(
         {
-            "guardrail_reason": "kb_v2_effective_status",
+            "guardrail_reason": "legal_kb_effective_status",
             "guardrail_stage": "retrieval",
             "final_response": "Van ban 36/2024/QH15 hien dang co hieu luc.",
         }
     )
 
     assert result["guardrail_triggered"] is True
-    assert result["guardrail_reason"] == "kb_v2_effective_status"
+    assert result["guardrail_reason"] == "legal_kb_effective_status"
 
 
 @pytest.mark.asyncio
-async def test_output_guardrail_preserves_kb_v2_historical_lookup():
+async def test_output_guardrail_preserves_legal_kb_historical_lookup():
     result = await output_guardrail_node(
         {
-            "guardrail_reason": "kb_v2_historical_lookup",
+            "guardrail_reason": "legal_kb_historical_lookup",
             "guardrail_stage": "retrieval",
             "final_response": "Thong tin lich su, khong phai can cu hien hanh.",
         }
     )
 
     assert result["guardrail_triggered"] is True
-    assert result["guardrail_reason"] == "kb_v2_historical_lookup"
+    assert result["guardrail_reason"] == "legal_kb_historical_lookup"
 
 
 @pytest.mark.asyncio
-async def test_llm_generate_adds_kb_v2_evidence_notice_to_prompt(monkeypatch):
+async def test_llm_generate_adds_legal_kb_evidence_notice_to_prompt(monkeypatch):
     captured: dict[str, str] = {}
 
     class _FakeLlm:
@@ -1442,23 +1445,23 @@ async def test_llm_generate_adds_kb_v2_evidence_notice_to_prompt(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_document_lookup_response_hides_unpublished_or_suspended_documents():
+async def test_legal_kb_document_lookup_response_hides_unpublished_or_suspended_documents():
     class _Session:
         async def scalar(self, _stmt):
             return None
 
-    result = await _kb_v2_document_lookup_response(_Session(), "36/2024/QH15")
+    result = await _legal_kb_document_lookup_response(_Session(), "36/2024/QH15")
 
     assert result is None
 
 
 @pytest.mark.asyncio
-async def test_kb_v2_effective_status_response_hides_unpublished_or_suspended_documents():
+async def test_legal_kb_effective_status_response_hides_unpublished_or_suspended_documents():
     class _Session:
         async def scalar(self, _stmt):
             return None
 
-    result = await _kb_v2_effective_status_response(_Session(), "36/2024/QH15")
+    result = await _legal_kb_effective_status_response(_Session(), "36/2024/QH15")
 
     assert result is None
 

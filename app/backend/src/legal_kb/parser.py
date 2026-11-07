@@ -1,6 +1,6 @@
-"""KB v2 canonical-node parser for DOCX ingestion.
+"""kho văn bản canonical-node parser for DOCX ingestion.
 
-This layer reuses the existing DOCX parser + legal chunker, then adds KB v2
+This layer reuses the existing DOCX parser + legal chunker, then adds kho văn bản
 review semantics:
 - normal legal text is auto-approved
 - tables/forms inside article/clause/point are answerable
@@ -14,7 +14,7 @@ import unicodedata
 from dataclasses import dataclass
 from uuid import uuid4
 
-from src.models.kb_v2 import KbV2CanonicalNode
+from src.models.legal_kb import LegalKbNode
 from src.rag.chunking import ChunkDraft, DocMeta, chunk_document
 from src.rag.parsing import ParseResult, parse_document
 
@@ -61,7 +61,7 @@ _FOOTNOTE_PATTERNS = (
 
 
 @dataclass(frozen=True)
-class KbV2ParseArtifacts:
+class LegalKbParseArtifacts:
     parsed: ParseResult
     drafts: list[ChunkDraft]
 
@@ -81,18 +81,18 @@ class _NodeContext:
     in_appendix: bool = False
 
 
-def parse_docx_into_artifacts(*, source_path: str, title: str) -> KbV2ParseArtifacts:
+def parse_docx_into_artifacts(*, source_path: str, title: str) -> LegalKbParseArtifacts:
     parsed = parse_document(source_path)
     meta = DocMeta(
         title=title,
         doc_type="KB_DRAFT",
         effective_date="draft",
         status="draft",
-        parser_profile="kb_v2",
-        parser_version="kb-v2-p1",
+        parser_profile="legal_kb",
+        parser_version="legal-kb-p1",
     )
     drafts = chunk_document(parsed, meta)
-    return KbV2ParseArtifacts(parsed=parsed, drafts=drafts)
+    return LegalKbParseArtifacts(parsed=parsed, drafts=drafts)
 
 
 def build_canonical_nodes(
@@ -100,8 +100,8 @@ def build_canonical_nodes(
     revision_id: str,
     drafts: list[ChunkDraft],
     parser_confidence: float,
-) -> list[KbV2CanonicalNode]:
-    nodes: list[KbV2CanonicalNode] = []
+) -> list[LegalKbNode]:
+    nodes: list[LegalKbNode] = []
     context = _NodeContext()
 
     for order_index, draft in enumerate(_restore_structural_article_drafts(drafts)):
@@ -109,7 +109,7 @@ def build_canonical_nodes(
         parent_id = _resolve_parent_id(node_type=node_type, context=context)
         container_type, container_label = _container_metadata(draft=draft, context=context)
 
-        node = KbV2CanonicalNode(
+        node = LegalKbNode(
             node_id=str(uuid4()),
             revision_id=revision_id,
             parent_id=parent_id,
@@ -243,7 +243,7 @@ def _build_label(draft: ChunkDraft, node_type: str) -> str | None:
     return None
 
 
-def _annotate_review_only_role(*, node: KbV2CanonicalNode, draft: ChunkDraft) -> None:
+def _annotate_review_only_role(*, node: LegalKbNode, draft: ChunkDraft) -> None:
     role = _review_only_role(draft)
     if role is None:
         return
@@ -255,7 +255,7 @@ def _annotate_review_only_role(*, node: KbV2CanonicalNode, draft: ChunkDraft) ->
     node.label = _review_only_label(role)
 
 
-def _annotate_answerability(*, node: KbV2CanonicalNode) -> None:
+def _annotate_answerability(*, node: LegalKbNode) -> None:
     structured_content = dict(node.structured_content or {})
     if structured_content.get("content_kind") == "structure":
         structured_content["structural_only"] = True
@@ -354,7 +354,7 @@ def _container_metadata(*, draft: ChunkDraft, context: _NodeContext) -> tuple[st
     return None, None
 
 
-def _advance_context(*, context: _NodeContext, node: KbV2CanonicalNode, draft: ChunkDraft) -> None:
+def _advance_context(*, context: _NodeContext, node: LegalKbNode, draft: ChunkDraft) -> None:
     if node.node_type == "chapter":
         context.chapter_node_id = node.node_id
         context.chapter_label = node.label

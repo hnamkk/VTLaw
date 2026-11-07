@@ -1,4 +1,4 @@
-"""KB v2 retrieval with eligibility filtering before search/ranking."""
+"""kho văn bản retrieval with eligibility filtering before search/ranking."""
 
 from __future__ import annotations
 
@@ -9,20 +9,19 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal
 
-from sqlalchemy import Select, bindparam, func, or_, select
+from sqlalchemy import Select, bindparam, case, func, or_, select
 from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
-from src.models.kb_v2 import (
-    KbV2CanonicalNode,
-    KbV2DocumentRelation,
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2RetrievalUnit,
-    KbV2SourceAsset,
+from src.models.legal_kb import (
+    LegalKbNode,
+    LegalKbRelation,
+    LegalKbRevision,
+    LegalKbDocument,
+    LegalKbRetrievalUnit,
+    LegalKbSourceAsset,
 )
-from src.rag.retrieval.query_utils import semantic_document_scope_numbers
 from src.schemas.rag import RetrievedChunk
 
 _FTS_UNSAFE_CHARS = re.compile(r"[\\':*!&|<>()~]")
@@ -34,9 +33,18 @@ _DOC_NUMBER_PATTERN = re.compile(
     re.IGNORECASE,
 )
 _MAX_CANDIDATES_PER_DOCUMENT = 8
+_VI_MARKED = "àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ"
+_VI_PLAIN = "".join(
+    "d" if ch == "đ" else unicodedata.normalize("NFD", ch)[0] for ch in _VI_MARKED
+)
+
+
+def _unaccent_sql(column):
+    """Normalize Vietnamese without requiring a database extension or changing source text."""
+    return func.translate(func.lower(column), _VI_MARKED, _VI_PLAIN)
+
 _DOC_NUMBER_PATTERN = re.compile(r"\b(\d{1,3}/\d{4}/[^\s,.;:!?)]*)", re.IGNORECASE)
 _RAW_LOOKUP_STOP_WORDS = {
-    "bao",
     "bi",
     "bị",
     "co",
@@ -64,7 +72,7 @@ _RAW_LOOKUP_STOP_WORDS = {
 
 
 @dataclass(frozen=True)
-class KbV2RetrievalResult:
+class LegalKbRetrievalResult:
     chunks: list[RetrievedChunk]
     future_notice: str | None = None
 
@@ -78,7 +86,7 @@ def _normalize_for_lookup(text: str) -> str:
 
 
 def _raw_lookup_terms(query: str) -> tuple[str, ...]:
-    sanitized = re.sub(r"[^\w\s/]+", " ", query.lower(), flags=re.UNICODE)
+    sanitized = _normalize_for_lookup(query)
     return tuple(
         dict.fromkeys(
             term
@@ -126,8 +134,8 @@ def _exact_match_score(
     *,
     definition_intent: bool = False,
 ) -> float:
-    body_text = _exact_body_text(row)
-    metadata_text = _exact_metadata_text(row)
+    body_text = _normalize_for_lookup(_exact_body_text(row))
+    metadata_text = _normalize_for_lookup(_exact_metadata_text(row))
     matched_body_terms = sum(1 for term in terms if term in body_text)
     matched_metadata_terms = sum(1 for term in terms if term in metadata_text)
     term_score = matched_body_terms / max(1, len(terms))
@@ -146,6 +154,8 @@ def _exact_match_score(
             for marker in (" la ", " bao gom ", " duoc hieu ", " duoc xac dinh ")
         ):
             definition_bonus = 0.18
+        if terms and f"{' '.join(terms)} la " in f"{body_text} ":
+            definition_bonus += 0.35
     doc_number = str(getattr(row, "document_number", "") or "").lower()
     doc_bonus = 0.45 if doc_refs and doc_number in doc_refs else 0.0
     return term_score + metadata_score + phrase_bonus + definition_bonus + doc_bonus
@@ -192,8 +202,8 @@ async def _document_ids_for_explicit_refs(
     for ref in refs:
         variants.update(_document_number_variants(ref))
 
-    stmt = select(KbV2LegalDocument.document_id).where(
-        sa_text("lower(kb_v2_legal_documents.document_number) = ANY(:document_numbers)")
+    stmt = select(LegalKbDocument.document_id).where(
+        sa_text("lower(legal_kb_legal_documents.document_number) = ANY(:document_numbers)")
     )
     rows = (await session.execute(stmt.params(document_numbers=sorted(variants)))).scalars().all()
     return tuple(dict.fromkeys(rows))
@@ -201,40 +211,41 @@ async def _document_ids_for_explicit_refs(
 
 def _base_filters(query_date: date, *, mode: Literal["active", "historical"] = "active") -> tuple:
     shared_filters = (
-        KbV2DocumentRevision.review_status == "approved",
-        KbV2CanonicalNode.review_status == "approved",
-        or_(KbV2RetrievalUnit.effective_from.is_(None), KbV2RetrievalUnit.effective_from <= query_date),
-        or_(KbV2RetrievalUnit.effective_to.is_(None), KbV2RetrievalUnit.effective_to > query_date),
+        LegalKbRevision.review_status == "approved",
+        LegalKbNode.review_status == "approved",
+        or_(LegalKbRetrievalUnit.effective_from.is_(None), LegalKbRetrievalUnit.effective_from <= query_date),
+        or_(LegalKbRetrievalUnit.effective_to.is_(None), LegalKbRetrievalUnit.effective_to > query_date),
     )
     if mode == "historical":
         return (
-            KbV2DocumentRevision.publication_status.in_(("published", "suspended", "archived")),
-            KbV2RetrievalUnit.answerable_status.in_(("active", "historical")),
+            LegalKbRevision.publication_status.in_(("published", "archived")),
+            LegalKbRetrievalUnit.answerable_status.in_(("active", "historical")),
             *shared_filters,
         )
     return (
-        KbV2DocumentRevision.publication_status == "published",
-        KbV2LegalDocument.legal_status == "active",
-        KbV2RetrievalUnit.answerable_status == "active",
+        LegalKbRevision.publication_status == "published",
+        LegalKbDocument.legal_status == "active",
+        LegalKbRetrievalUnit.answerable_status == "active",
         *shared_filters,
     )
 
 
 def _candidate_columns() -> tuple:
     return (
-        KbV2RetrievalUnit.retrieval_unit_id,
-        KbV2RetrievalUnit.document_id,
-        KbV2RetrievalUnit.text,
-        KbV2RetrievalUnit.citation_label,
-        KbV2RetrievalUnit.metadata_json,
-        KbV2RetrievalUnit.answerable_status,
-        KbV2RetrievalUnit.effective_from,
-        KbV2RetrievalUnit.effective_to,
-        KbV2LegalDocument.title.label("doc_title"),
-        KbV2LegalDocument.document_number,
-        KbV2LegalDocument.document_type,
-        KbV2DocumentRevision.source_url.label("revision_source_url"),
-        KbV2SourceAsset.source_url.label("asset_source_url"),
+        LegalKbRetrievalUnit.retrieval_unit_id,
+        LegalKbRetrievalUnit.document_id,
+        LegalKbRetrievalUnit.text,
+        LegalKbRetrievalUnit.citation_label,
+        LegalKbRetrievalUnit.metadata_json,
+        LegalKbNode.provenance.label("node_provenance"),
+        LegalKbRetrievalUnit.answerable_status,
+        LegalKbRetrievalUnit.effective_from,
+        LegalKbRetrievalUnit.effective_to,
+        LegalKbDocument.title.label("doc_title"),
+        LegalKbDocument.document_number,
+        LegalKbDocument.document_type,
+        LegalKbRevision.source_url.label("revision_source_url"),
+        LegalKbSourceAsset.source_url.label("asset_source_url"),
     )
 
 
@@ -242,23 +253,36 @@ def _base_stmt(query_date: date, *, mode: Literal["active", "historical"] = "act
     return (
         select(*_candidate_columns())
         .join(
-            KbV2DocumentRevision,
-            KbV2DocumentRevision.revision_id == KbV2RetrievalUnit.revision_id,
+            LegalKbRevision,
+            LegalKbRevision.revision_id == LegalKbRetrievalUnit.revision_id,
         )
         .join(
-            KbV2CanonicalNode,
-            KbV2CanonicalNode.node_id == KbV2RetrievalUnit.canonical_node_id,
+            LegalKbNode,
+            LegalKbNode.node_id == LegalKbRetrievalUnit.canonical_node_id,
         )
         .join(
-            KbV2LegalDocument,
-            KbV2LegalDocument.document_id == KbV2RetrievalUnit.document_id,
+            LegalKbDocument,
+            LegalKbDocument.document_id == LegalKbRetrievalUnit.document_id,
         )
         .outerjoin(
-            KbV2SourceAsset,
-            KbV2SourceAsset.asset_id == KbV2DocumentRevision.source_asset_id,
+            LegalKbSourceAsset,
+            LegalKbSourceAsset.asset_id == LegalKbRevision.source_asset_id,
         )
         .where(*_base_filters(query_date, mode=mode))
     )
+
+
+def _lexical_candidates(query_date: date, *, mode: str, document_ids: tuple[str, ...] | None):
+    stmt = _base_stmt(query_date, mode=mode)
+    if document_ids:
+        stmt = stmt.where(LegalKbRetrievalUnit.document_id.in_(document_ids))
+    # MATERIALIZED prevents PostgreSQL from repeating translate for each term,
+    # score and WHERE expression on long legal provisions.
+    return stmt.add_columns(
+        _unaccent_sql(LegalKbRetrievalUnit.text).label("normalized_text"),
+        _unaccent_sql(LegalKbRetrievalUnit.citation_label).label("normalized_locator"),
+        _unaccent_sql(LegalKbDocument.title).label("normalized_title"),
+    ).cte("eligible_lexical_units").prefix_with("MATERIALIZED")
 
 
 def _parse_locator(citation_label: str | None) -> tuple[int | None, int | None, str | None]:
@@ -286,6 +310,9 @@ def _row_to_candidate(
     citation_label = row.citation_label or metadata.get("label") or ""
     article_num, clause_num, point_num = _parse_locator(citation_label)
     section_path = [part.strip() for part in citation_label.split(">") if part.strip()]
+    provenance = getattr(row, "node_provenance", None)
+    if isinstance(provenance, dict) and provenance.get("heading_path"):
+        section_path = list(provenance["heading_path"]) + section_path
     text = row.text.strip()
     candidate = {
         "chunk_id": row.retrieval_unit_id,
@@ -305,7 +332,7 @@ def _row_to_candidate(
         "section_number": str(article_num) if article_num is not None else None,
         "sign_codes": [],
         "asset_ids": [],
-        "corpus": "kb_v2",
+        "corpus": "legal_kb",
         "doc_title": row.doc_title or "Chưa rõ",
         "doc_type": row.document_type or "",
         "source_url": row.asset_source_url or row.revision_source_url,
@@ -327,15 +354,18 @@ async def _vector_search(
     document_ids: tuple[str, ...] | None,
     mode: Literal["active", "historical"] = "active",
 ) -> list[dict]:
-    cosine_dist = KbV2RetrievalUnit.embedding_vector.cosine_distance(query_embedding)
+    # Historical lookups use lexical/exact evidence, never inactive vector search.
+    if mode != "active":
+        return []
+    cosine_dist = LegalKbRetrievalUnit.embedding_vector.cosine_distance(query_embedding)
     stmt = (
         _base_stmt(query_date, mode=mode)
-        .where(KbV2RetrievalUnit.embedding_vector.isnot(None))
+        .where(LegalKbRetrievalUnit.embedding_vector.isnot(None))
         .order_by(cosine_dist)
         .limit(top_k)
     )
     if document_ids:
-        stmt = stmt.where(KbV2RetrievalUnit.document_id.in_(document_ids))
+        stmt = stmt.where(LegalKbRetrievalUnit.document_id.in_(document_ids))
     rows = (await session.execute(stmt.add_columns((1 - cosine_dist).label("score")))).all()
     return [
         _row_to_candidate(
@@ -349,10 +379,9 @@ async def _vector_search(
 
 
 def _build_tsquery_string(query: str) -> str:
-    sanitized = _FTS_UNSAFE_CHARS.sub(" ", query).strip()
-    terms = [term for term in re.split(r"\s+", sanitized) if len(term) >= 2]
+    terms = [term for term in _raw_lookup_terms(query) if term.isalnum()]
     limited_terms = terms[: settings.RETRIEVAL_FTS_MAX_TERMS]
-    return " & ".join(f"{term}:*" for term in limited_terms) if limited_terms else ""
+    return " | ".join(f"{term}:*" for term in limited_terms) if limited_terms else ""
 
 
 async def _fts_search(
@@ -367,11 +396,10 @@ async def _fts_search(
     tsquery = _build_tsquery_string(query)
     if not tsquery:
         return []
-    stmt = _base_stmt(query_date, mode=mode)
-    if document_ids:
-        stmt = stmt.where(KbV2RetrievalUnit.document_id.in_(document_ids))
+    candidates = _lexical_candidates(query_date, mode=mode, document_ids=document_ids)
+    stmt = select(candidates)
     tsquery_param = bindparam("tsquery")
-    tsvector = func.to_tsvector("simple", KbV2RetrievalUnit.text)
+    tsvector = func.to_tsvector("simple", candidates.c.normalized_text)
     tsquery_expr = func.to_tsquery("simple", tsquery_param)
     score_expr = func.ts_rank_cd(tsvector, tsquery_expr).label("score")
     stmt = (
@@ -403,7 +431,13 @@ async def _exact_search(
     document_ids: tuple[str, ...] | None,
     mode: Literal["active", "historical"] = "active",
 ) -> list[dict]:
-    terms = _raw_lookup_terms(query)
+    # Expansion adds synonyms after the original question. Keep the subject of
+    # an explicit "X là gì" definition intact for phrase matching.
+    normalized_query = _normalize_for_lookup(query)
+    definition_subject = normalized_query.split(" la gi", 1)[0]
+    terms = _raw_lookup_terms(
+        definition_subject if " la gi" in normalized_query else query
+    )
     doc_refs = {
         variant
         for ref in _extract_document_refs(query)
@@ -412,30 +446,34 @@ async def _exact_search(
     if not terms and not doc_refs:
         return []
 
+    candidates = _lexical_candidates(query_date, mode=mode, document_ids=document_ids)
     clauses = []
     params: dict[str, object] = {}
     for index, term in enumerate(terms[:10]):
         key = f"term_{index}"
-        clauses.append(
-            sa_text(
-                "("
-                f"lower(kb_v2_retrieval_units.text) LIKE :{key} "
-                f"OR lower(kb_v2_retrieval_units.citation_label) LIKE :{key} "
-                f"OR lower(kb_v2_legal_documents.title) LIKE :{key}"
-                ")"
-            )
-        )
+        clauses.append(or_(
+            candidates.c.normalized_text.like(bindparam(key)),
+            candidates.c.normalized_locator.like(bindparam(key)),
+            candidates.c.normalized_title.like(bindparam(key)),
+        ))
         params[key] = f"%{term}%"
     if doc_refs:
-        clauses.append(sa_text("lower(kb_v2_legal_documents.document_number) = ANY(:doc_refs)"))
-        params["doc_refs"] = list(doc_refs)
-    stmt = _base_stmt(query_date, mode=mode)
-    if document_ids:
-        stmt = stmt.where(KbV2RetrievalUnit.document_id.in_(document_ids))
+        clauses.append(func.lower(candidates.c.document_number).in_(sorted(doc_refs)))
+    stmt = select(candidates)
     fetch_limit = max(top_k * 40, 500)
-    stmt = stmt.where(or_(*clauses)).params(**params).limit(fetch_limit)
-    rows = (await session.execute(stmt)).all()
+    # Choose candidates by overlap before LIMIT, not physical table order.
+    coverage = sum(case((clause, 1), else_=0) for clause in clauses)
     definition_intent = _is_definition_lookup(query)
+    if definition_intent and terms:
+        # Preserve a direct subject definition before the candidate cap.
+        coverage += case((
+            candidates.c.normalized_text.like(f"%{' '.join(terms)} la %"),
+            len(terms),
+        ), else_=0)
+    stmt = stmt.where(or_(*clauses)).order_by(
+        coverage.desc(), candidates.c.retrieval_unit_id
+    ).limit(fetch_limit).params(**params)
+    rows = (await session.execute(stmt)).all()
     ranked = sorted(
         rows,
         key=lambda row: _exact_match_score(
@@ -446,6 +484,10 @@ async def _exact_search(
         ),
         reverse=True,
     )
+    max_score = max((
+        _exact_match_score(row, terms, doc_refs, definition_intent=definition_intent)
+        for row in ranked
+    ), default=1.0) or 1.0
     return [
         _row_to_candidate(
             row,
@@ -457,167 +499,12 @@ async def _exact_search(
                     terms,
                     doc_refs,
                     definition_intent=definition_intent,
-                ),
+                ) / max_score,
             ),
             mode=mode,
         )
         for row in ranked[:top_k]
     ]
-
-
-def _topic_supplement_locators(query: str) -> tuple[tuple[str, int, int | None], ...]:
-    """Return high-confidence active units that should accompany known topics."""
-    normalized = _normalize_for_lookup(query)
-    supplements: list[tuple[str, int, int | None]] = []
-
-    if "kiem dinh an toan ky thuat" in normalized and "la gi" in normalized:
-        supplements.append(("16/2021/TT-BGTVT", 3, 1))
-    definition_query = any(
-        phrase in normalized for phrase in ("la gi", "duoc hieu", "khai niem", "dinh nghia")
-    )
-    if "duong cao toc" in normalized and definition_query:
-        supplements.append(("35/2024/QH15", 44, 1))
-    elif "duong cao toc" in normalized:
-        supplements.append(("36/2024/QH15", 25, 1))
-    if "hanh lang an toan duong bo" in normalized and definition_query:
-        supplements.append(("35/2024/QH15", 2, 5))
-    if "ket cau ha tang duong bo" in normalized and any(
-        phrase in normalized for phrase in ("gom", "bao gom", "la gi")
-    ):
-        supplements.append(("35/2024/QH15", 2, 4))
-    if "luat duong bo" in normalized and any(
-        phrase in normalized for phrase in ("noi dung chinh", "nhom noi dung")
-    ):
-        supplements.append(("35/2024/QH15", 2, 1))
-    elif "luat duong bo" in normalized and any(
-        phrase in normalized for phrase in ("dieu chinh", "pham vi")
-    ):
-        supplements.extend((("35/2024/QH15", 1, None), ("35/2024/QH15", 2, 1)))
-    if ("luat trat tu" in normalized or "luat ve trat tu" in normalized) and any(
-        phrase in normalized for phrase in ("tap trung", "bao quat", "nhom van de", "pham vi")
-    ):
-        supplements.append(("36/2024/QH15", 1, None))
-
-    if any(
-        phrase in normalized
-        for phrase in (
-            "bai thuc hanh co ban",
-            "4 bai thuc hanh",
-            "bon bai thuc hanh",
-            "thuc hanh sat hach mo to",
-            "nguoi sat hach giay phep lai xe hang a1",
-        )
-    ):
-        supplements.append(("108/2026/TT-BCA", 4, 2))
-
-    if any(
-        phrase in normalized
-        for phrase in ("phan ly thuyet", "ly thuyet kiem tra", "sat hach ly thuyet")
-    ):
-        supplements.append(("108/2026/TT-BCA", 14, 1))
-
-    has_registration = "dang ky xe" in normalized
-    has_inspection = any(
-        phrase in normalized
-        for phrase in (
-            "kiem dinh xe",
-            "kiem dinh an toan ky thuat",
-            "giay chung nhan kiem dinh",
-        )
-    )
-    asks_distinction = any(
-        phrase in normalized
-        for phrase in ("khac nhau", "phan biet", "xac nhan hai van de")
-    )
-    if has_registration and has_inspection and asks_distinction:
-        supplements.extend(
-            (
-                ("79/2024/TT-BCA", 3, 1),
-                ("16/2021/TT-BGTVT", 3, 1),
-                ("16/2021/TT-BGTVT", 3, 2),
-            )
-        )
-    if has_registration and any(
-        phrase in normalized
-        for phrase in (
-            "nop o dau",
-            "noi nop ho so",
-            "dia diem nop",
-            "co quan dang ky xe",
-            "tiep nhan ho so",
-        )
-    ):
-        supplements.append(("79/2024/TT-BCA", 3, 4))
-    if "luat duong bo" in normalized and "luat trat tu" in normalized:
-        supplements.extend(
-            (
-                ("35/2024/QH15", 1, None),
-                ("36/2024/QH15", 1, None),
-            )
-        )
-    if "luat nen" in normalized and "thu tuc dang ky" in normalized:
-        supplements.extend(
-            (
-                ("36/2024/QH15", 2, 2),
-                ("79/2024/TT-BCA", 3, 1),
-            )
-        )
-    if has_registration and has_inspection and "kinh doanh van tai" in normalized:
-        supplements.extend(
-            (
-                ("79/2024/TT-BCA", 3, 1),
-                ("16/2021/TT-BGTVT", 3, 1),
-                ("158/2024/NĐ-CP", 1, None),
-            )
-        )
-
-    return tuple(dict.fromkeys(supplements))
-
-
-async def _topic_supplement_search(
-    session: AsyncSession,
-    *,
-    query: str,
-    query_date: date,
-    document_ids: tuple[str, ...] | None,
-    mode: Literal["active", "historical"] = "active",
-) -> list[dict]:
-    locators = _topic_supplement_locators(query)
-    if not locators:
-        return []
-
-    candidates: list[dict] = []
-    for document_number, article_num, clause_num in locators:
-        stmt = (
-            _base_stmt(query_date, mode=mode)
-            .where(
-                KbV2LegalDocument.document_number == document_number,
-                KbV2RetrievalUnit.citation_label.ilike(f"%Điều {article_num}%"),
-            )
-            .limit(80)
-        )
-        if document_ids is not None:
-            stmt = stmt.where(KbV2RetrievalUnit.document_id.in_(document_ids))
-        rows = (await session.execute(stmt)).all()
-        exact_rows = [
-            item
-            for item in rows
-            if _parse_locator(getattr(item, "citation_label", None))[0] == article_num
-            and _parse_locator(getattr(item, "citation_label", None))[1] == clause_num
-            and "thông tin ban hành" not in str(getattr(item, "citation_label", "")).lower()
-        ]
-        row = next(
-            (
-                item
-                for item in exact_rows
-                if article_num <= 3
-                and str(getattr(item, "citation_label", "")).lower().startswith("chương 1")
-            ),
-            exact_rows[0] if exact_rows else None,
-        )
-        if row is not None:
-            candidates.append(_row_to_candidate(row, "exact_score", 1.0, mode=mode))
-    return candidates
 
 
 def _merge_candidates(*candidate_groups: list[dict]) -> list[RetrievedChunk]:
@@ -690,7 +577,7 @@ def _merge_candidates(*candidate_groups: list[dict]) -> list[RetrievedChunk]:
     return selected
 
 
-async def hybrid_retrieve_v2(
+async def hybrid_retrieve_legal(
     session: AsyncSession,
     query: str,
     query_embedding: list[float],
@@ -698,22 +585,12 @@ async def hybrid_retrieve_v2(
     query_date: date,
     document_ids: tuple[str, ...] | None = None,
     mode: Literal["active", "historical"] = "active",
-) -> KbV2RetrievalResult:
+) -> LegalKbRetrievalResult:
     scoped_document_ids = document_ids
     if scoped_document_ids is None:
         scoped_document_ids = await _document_ids_for_explicit_refs(session, query)
         if scoped_document_ids == ():
-            return KbV2RetrievalResult(chunks=[])
-    if scoped_document_ids is None:
-        semantic_numbers = semantic_document_scope_numbers(query)
-        if semantic_numbers:
-            scoped_document_ids = await _document_ids_for_explicit_refs(
-                session,
-                " ".join(semantic_numbers),
-            )
-            if scoped_document_ids == ():
-                return KbV2RetrievalResult(chunks=[])
-
+            return LegalKbRetrievalResult(chunks=[])
     vector_candidates = await _vector_search(
         session,
         query_embedding=query_embedding,
@@ -738,16 +615,8 @@ async def hybrid_retrieve_v2(
         document_ids=scoped_document_ids,
         mode=mode,
     )
-    supplement_candidates = await _topic_supplement_search(
-        session,
-        query=query,
-        query_date=query_date,
-        document_ids=scoped_document_ids,
-        mode=mode,
-    )
-    return KbV2RetrievalResult(
+    return LegalKbRetrievalResult(
         chunks=_merge_candidates(
-            supplement_candidates,
             vector_candidates,
             fts_candidates,
             exact_candidates,
@@ -768,24 +637,24 @@ async def future_effective_notice_for_query(
 
     stmt = (
         select(
-            KbV2LegalDocument.title,
-            KbV2LegalDocument.document_number,
-            KbV2LegalDocument.effective_date,
+            LegalKbDocument.title,
+            LegalKbDocument.document_number,
+            LegalKbDocument.effective_date,
         )
         .join(
-            KbV2DocumentRevision,
-            KbV2DocumentRevision.document_id == KbV2LegalDocument.document_id,
+            LegalKbRevision,
+            LegalKbRevision.document_id == LegalKbDocument.document_id,
         )
         .where(
-            KbV2DocumentRevision.publication_status == "published",
-            KbV2LegalDocument.effective_date.is_not(None),
-            KbV2LegalDocument.effective_date > reference_date,
+            LegalKbRevision.publication_status == "published",
+            LegalKbDocument.effective_date.is_not(None),
+            LegalKbDocument.effective_date > reference_date,
         )
-        .order_by(KbV2LegalDocument.effective_date.asc())
+        .order_by(LegalKbDocument.effective_date.asc())
         .limit(3)
     )
     if document_ids:
-        stmt = stmt.where(KbV2LegalDocument.document_id.in_(document_ids))
+        stmt = stmt.where(LegalKbDocument.document_id.in_(document_ids))
     rows = (await session.execute(stmt)).all()
     matches = [
         row
@@ -812,10 +681,10 @@ async def related_document_ids(
     *,
     document_id: str,
 ) -> tuple[str, ...]:
-    stmt = select(KbV2DocumentRelation).where(
+    stmt = select(LegalKbRelation).where(
         or_(
-            KbV2DocumentRelation.source_document_id == document_id,
-            KbV2DocumentRelation.target_document_id == document_id,
+            LegalKbRelation.source_document_id == document_id,
+            LegalKbRelation.target_document_id == document_id,
         )
     )
     relations = (await session.execute(stmt)).scalars().all()

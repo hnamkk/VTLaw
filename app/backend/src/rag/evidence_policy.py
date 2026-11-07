@@ -253,6 +253,21 @@ def evaluate_evidence_policy(
     query_intent: str | None,
     chunks: list[RetrievedChunk],
 ) -> EvidencePolicyDecision:
+    normalized_query = _normalize(query_text)
+    if query_intent == "penalty":
+        # Ask for the actor independently of score ties or number of documents.
+        subjects = ("xe may", "mo to", "o to", "xe tai", "xe khach", "xe dap",
+                    "nguoi di bo", "nguoi dieu khien", "chu xe", "doanh nghiep")
+        if not _has_explicit_locator(query_text) and not any(s in normalized_query for s in subjects):
+            return EvidencePolicyDecision(
+                guardrail_reason="evidence_clarification",
+                final_response="Tôi chưa đủ tình tiết để xác định mức xử lý. Bạn đang hỏi cho loại phương tiện hoặc đối tượng nào? Hãy nêu thêm hành vi và tình tiết cụ thể nếu có.",
+            )
+        if chunks and not any("phat tien" in _normalize(c.full_text or c.text_snippet) for c in chunks):
+            return EvidencePolicyDecision(
+                guardrail_reason="evidence_insufficient",
+                final_response="Tôi tìm thấy quy định liên quan nhưng chưa có căn cứ trực tiếp về mức phạt trong kết quả tra cứu. Tôi chưa thể xác định mức xử lý cho tình huống này.",
+            )
     if len(chunks) < 2:
         return EvidencePolicyDecision()
 

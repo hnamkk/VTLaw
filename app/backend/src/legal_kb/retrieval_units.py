@@ -7,11 +7,11 @@ from hashlib import sha256
 from uuid import uuid4
 
 from src.core.config import settings
-from src.models.kb_v2 import (
-    KbV2CanonicalNode,
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2RetrievalUnit,
+from src.models.legal_kb import (
+    LegalKbNode,
+    LegalKbRevision,
+    LegalKbDocument,
+    LegalKbRetrievalUnit,
 )
 from src.rag.embedding import embed_texts
 
@@ -29,14 +29,14 @@ _POINT_CITATION_RE = re.compile(r"(?:điểm|Điểm|Diem)\s+([A-Za-zĐđ])", re
 
 @dataclass
 class GeneratedRetrievalUnits:
-    units: list[KbV2RetrievalUnit]
+    units: list[LegalKbRetrievalUnit]
     answerable_count: int
 
 
 async def build_retrieval_units(
     *,
-    document: KbV2LegalDocument,
-    revision: KbV2DocumentRevision,
+    document: LegalKbDocument,
+    revision: LegalKbRevision,
 ) -> GeneratedRetrievalUnits:
     approved_nodes = sorted(
         [
@@ -51,7 +51,7 @@ async def build_retrieval_units(
         return GeneratedRetrievalUnits(units=[], answerable_count=0)
 
     parent_map = {node.node_id: node for node in revision.canonical_nodes}
-    unit_specs: list[tuple[KbV2CanonicalNode, str, bool, str]] = []
+    unit_specs: list[tuple[LegalKbNode, str, bool, str]] = []
     for node in approved_nodes:
         citation_label = citation_label_for_node(node=node, parent_map=parent_map)
         answerable = node_is_answerable(node)
@@ -66,12 +66,12 @@ async def build_retrieval_units(
     vectors = await embed_texts(answerable_texts) if answerable_texts else []
     vector_iter = iter(vectors)
 
-    units: list[KbV2RetrievalUnit] = []
+    units: list[LegalKbRetrievalUnit] = []
     for node, citation_label, answerable, text in unit_specs:
         vector = next(vector_iter) if answerable else None
         answerable_status = _answerable_status(document=document) if answerable else "not_answerable"
         units.append(
-            KbV2RetrievalUnit(
+            LegalKbRetrievalUnit(
                 retrieval_unit_id=str(uuid4()),
                 canonical_node_id=node.node_id,
                 document_id=document.document_id,
@@ -89,8 +89,8 @@ async def build_retrieval_units(
                     text=text,
                 ),
                 embedding_model=settings.EMBEDDING_MODEL_NAME if answerable else None,
-                embedding_version="kb_v2_v1" if answerable else None,
-                index_version="kb_v2_v1",
+                embedding_version="legal_kb_v1" if answerable else None,
+                index_version="legal_kb_v1",
                 metadata_json={
                     "node_type": node.node_type,
                     "label": node.label,
@@ -107,8 +107,8 @@ async def build_retrieval_units(
 
 def citation_label_for_node(
     *,
-    node: KbV2CanonicalNode,
-    parent_map: dict[str, KbV2CanonicalNode] | None = None,
+    node: LegalKbNode,
+    parent_map: dict[str, LegalKbNode] | None = None,
 ) -> str:
     structured_label = _structured_citation_label(node)
     if structured_label:
@@ -118,7 +118,7 @@ def citation_label_for_node(
     return _fit_citation_label(_fallback_citation_label(node=node, parent_map=parent_map), node=node)
 
 
-def _structured_citation_label(node: KbV2CanonicalNode) -> str | None:
+def _structured_citation_label(node: LegalKbNode) -> str | None:
     structured = node.structured_content or {}
     parts: list[str] = []
     chapter_num = _locator_value(structured.get("chapter_num"))
@@ -148,7 +148,7 @@ def _locator_value(value: object) -> str | None:
     return text or None
 
 
-def _fallback_citation_label(*, node: KbV2CanonicalNode, parent_map: dict[str, KbV2CanonicalNode]) -> str:
+def _fallback_citation_label(*, node: LegalKbNode, parent_map: dict[str, LegalKbNode]) -> str:
     labels: list[str] = []
     cursor = node
     seen: set[str] = set()
@@ -161,7 +161,7 @@ def _fallback_citation_label(*, node: KbV2CanonicalNode, parent_map: dict[str, K
     return " > ".join(label for label in labels if label) or f"Node {node.order_index}"
 
 
-def _fit_citation_label(label: str, *, node: KbV2CanonicalNode) -> str:
+def _fit_citation_label(label: str, *, node: LegalKbNode) -> str:
     if len(label) <= CITATION_LABEL_MAX_LENGTH:
         return label
     leaf = (node.label or "").strip() or f"Node {node.order_index}"
@@ -174,7 +174,7 @@ def _fit_citation_label(label: str, *, node: KbV2CanonicalNode) -> str:
 
 
 def citation_mismatches_for_nodes(
-    nodes: list[KbV2CanonicalNode],
+    nodes: list[LegalKbNode],
 ) -> list[str]:
     parent_map = {node.node_id: node for node in nodes}
     mismatches: list[str] = []
@@ -191,7 +191,7 @@ def citation_mismatches_for_nodes(
 
 def citation_mismatch_for_unit(
     *,
-    node: KbV2CanonicalNode,
+    node: LegalKbNode,
     citation_label: str | None,
 ) -> str | None:
     if not node_is_answerable(node):
@@ -205,7 +205,7 @@ def citation_mismatch_for_unit(
 
 def _citation_mismatch(
     *,
-    node: KbV2CanonicalNode,
+    node: LegalKbNode,
     citation_label: str,
     structured: dict,
 ) -> str | None:
@@ -226,12 +226,12 @@ def _last_match(pattern: re.Pattern[str], value: str) -> str | None:
     return str(matches[-1]) if matches else None
 
 
-def _citation_mismatch_message(*, node: KbV2CanonicalNode, expected: str, actual: str) -> str:
+def _citation_mismatch_message(*, node: LegalKbNode, expected: str, actual: str) -> str:
     label = node.label or f"Node {node.order_index}"
     return f"Mục {label} có trích dẫn chưa khớp: cần {expected}, hiện là {actual or 'chưa có'}."
 
 
-def node_is_answerable(node: KbV2CanonicalNode) -> bool:
+def node_is_answerable(node: LegalKbNode) -> bool:
     if not (node.text or "").strip():
         return False
     structured = node.structured_content or {}
@@ -246,8 +246,8 @@ def node_is_answerable(node: KbV2CanonicalNode) -> bool:
 
 def _embedding_text(
     *,
-    document: KbV2LegalDocument,
-    node: KbV2CanonicalNode,
+    document: LegalKbDocument,
+    node: LegalKbNode,
     citation_label: str,
 ) -> str:
     parts = [
@@ -256,16 +256,19 @@ def _embedding_text(
         f"Co quan ban hanh: {document.issuing_authority or 'Khong ro'}",
         f"Hieu luc tu: {_fmt_date(document.effective_date)}",
         f"Trich dan: {citation_label}",
+        "Ngữ cảnh cấu trúc: " + " > ".join((node.provenance or {}).get("heading_path") or []),
         f"Noi dung: {(node.text or '').strip()}",
     ]
     return "\n".join(parts).strip()
 
 
-def _answerable_status(*, document: KbV2LegalDocument) -> str:
+def _answerable_status(*, document: LegalKbDocument) -> str:
     today = date.today()
     if document.effective_date and document.effective_date > today:
         return "future"
-    if document.expiry_date and document.expiry_date < today:
+    if document.expiry_date and document.expiry_date <= today:
+        return "historical"
+    if document.legal_status in {"expired", "repealed"}:
         return "historical"
     if document.legal_status == "suspended":
         return "suspended"
@@ -274,8 +277,8 @@ def _answerable_status(*, document: KbV2LegalDocument) -> str:
 
 def _content_hash(
     *,
-    document: KbV2LegalDocument,
-    node: KbV2CanonicalNode,
+    document: LegalKbDocument,
+    node: LegalKbNode,
     citation_label: str,
     text: str,
 ) -> str:

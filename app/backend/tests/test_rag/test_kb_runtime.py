@@ -16,7 +16,7 @@ def test_chat_runtime_does_not_import_legacy_retrieval_module():
 
     assert "from src.rag.retrieval.hybrid import" not in nodes_source
     assert "from src.rag.retrieval.hybrid import" not in tools_source
-    assert "hybrid_retrieve_v2" in tools_source
+    assert "hybrid_retrieve_legal" in tools_source
 
 
 def test_public_documents_runtime_does_not_reference_legacy_document_models():
@@ -24,14 +24,14 @@ def test_public_documents_runtime_does_not_reference_legacy_document_models():
 
     assert "from src.models.legal_document import LegalDocument" not in documents_source
     assert "from src.models.document_chunk import DocumentChunk" not in documents_source
-    assert "KbV2LegalDocument" in documents_source
+    assert "LegalKbDocument" in documents_source
 
 
 def test_runtime_does_not_mount_or_import_legacy_admin_queue_route():
     main_source = _read("main.py")
     reconcile_source = _read("db/reconcile_uploaded_documents.py")
 
-    assert "admin_kb_v2" in main_source
+    assert "admin_legal_kb" in main_source
     assert "from src.api.v1.admin_kb import" not in main_source
     assert "include_router(admin_kb_router" not in main_source
     assert "from src.api.v1.admin_kb import" not in reconcile_source
