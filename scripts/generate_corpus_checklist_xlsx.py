@@ -5,7 +5,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-OUTPUT = ROOT / "corpus" / "kb-v2" / "corpus-checklist.xlsx"
+OUTPUT = ROOT / "corpus" / "legal-kb" / "corpus-checklist.xlsx"
 
 
 def _xml_escape(value: str) -> str:

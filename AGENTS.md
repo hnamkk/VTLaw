@@ -10,7 +10,7 @@ Single FastAPI app (not a monorepo). Stack: FastAPI + LangGraph + PostgreSQL 16/
 
 ## Session Completion Requirement
 
-If a session changes code or code-adjacent config, invoke `project-docs-maintenance` before the final response to keep `docs/project/` aligned with the implementation.
+If a session changes code or code-adjacent config, review and update the relevant `docs/project/` pages before the final response so they match the implementation.
 
 ## Behavioral Guidelines
 
@@ -38,10 +38,10 @@ These come from the PRD and must never be silently violated:
 
 | Rule | Source |
 |---|---|
-| Every RAG query MUST filter `status=active` BEFORE vector search — no bypass. | PRD F02 |
-| Every legal answer MUST carry a citation (Điều/Khoản) or state insufficient evidence. | PRD F03/F04 |
-| Every legal output MUST append the mandatory disclaimer (Luật AI 134/2025/QH15). | PRD F05 |
-| All KB changes go through `kb_update_queue` HITL approval before becoming `active`. | PRD F01 |
+| Every RAG query MUST filter eligible active sources BEFORE vector search — no bypass. | `docs/project/10-rag-retrieval-ranking-spec.md` |
+| Every legal answer MUST carry a citation (Điều/Khoản) or state insufficient evidence. | `docs/project/10-rag-retrieval-ranking-spec.md` |
+| Every legal output MUST append the mandatory disclaimer. | `docs/project/11-rag-guardrail-spec.md` |
+| All corpus changes go through admin review and publish before becoming available to chat. | `docs/project/13-kb-workflow.md` |
 
 ## Agent and PR Rules
 
@@ -61,6 +61,8 @@ cp .env.example .env   # then add OPENAI_API_KEY
 | Path | Purpose |
 |---|---|
 | `app/backend/src/rag/agent/` | LangGraph RAG agent đầy đủ: graph, state, nodes, tools |
+| `app/backend/src/legal_kb/` | Upload, parse, review, publish và dữ liệu kho văn bản |
+| `app/backend/src/rag/retrieval/hybrid_legal.py` | Exact, full-text, vector retrieval và ranking |
 | `app/backend/src/api/v1/` | FastAPI v1 routes; chat chính thức là `POST /api/v1/chat/stream` |
 | `app/backend/src/models/` | SQLAlchemy database models |
 | `app/backend/src/schemas/` | Pydantic schemas dùng chung cho RAG |
@@ -69,7 +71,6 @@ cp .env.example .env   # then add OPENAI_API_KEY
 | `app/backend/tests/` | pytest suite (`test_api/`, `test_rag/`, `test_integrations/`) |
 | `scripts/` | Maintenance and audit utilities |
 | `docs/project/` | Project specs (single source of truth — see below) |
-| `docs/guide/` | Technical Guidebook — consult before implementing (patterns, anti-patterns, code-style, testing, devops). Reference material, not a spec for this repo. |
 | `eval/` | Evaluation results (RAGAS) |
 
 ## Skill Reference Map
@@ -92,7 +93,6 @@ This repo ships skill definitions in `.claude/skills/`. Claude Code auto-loads t
 | Langfuse tracing, prompts, datasets, scores | [.claude/skills/langfuse/SKILL.md](.claude/skills/langfuse/SKILL.md) |
 | Frontend (Next.js / React) UI implementation | [.claude/skills/design-taste-frontend/SKILL.md](.claude/skills/design-taste-frontend/SKILL.md) |
 | Auditing & redesigning existing UI | [.claude/skills/redesign-existing-projects/SKILL.md](.claude/skills/redesign-existing-projects/SKILL.md) |
-| End of any code-changing session | [.claude/skills/project-docs-maintenance/SKILL.md](.claude/skills/project-docs-maintenance/SKILL.md) |
 
 When the task does not match the table (e.g. plain FastAPI route, SQLAlchemy model, Alembic migration), proceed with general knowledge — no skill required.
 
@@ -102,36 +102,28 @@ When the task does not match the table (e.g. plain FastAPI route, SQLAlchemy mod
 
 | Document | Purpose |
 |---|---|
-| [01-research-brief.md](docs/project/01-research-brief.md) | Research & problem framing |
-| [02-prd-product-requirements.md](docs/project/02-prd-product-requirements.md) | User stories, functional + non-functional requirements |
-| [03-wireframes-mockups.md](docs/project/03-wireframes-mockups.md) | UI/UX wireframes |
-| [04-api-spec.md](docs/project/04-api-spec.md) | API endpoints, request/response contracts |
-| [05-architecture.md](docs/project/05-architecture.md) | System architecture, components, data flows |
-| [06-database-schema.md](docs/project/06-database-schema.md) | PostgreSQL DDL, ERD, indexes (DB single source of truth) |
-| [07-deployment-devops.md](docs/project/07-deployment-devops.md) | Docker, CI/CD, deployment |
-| [08-testing-strategy.md](docs/project/08-testing-strategy.md) | Test layers, coverage targets |
-| [09-rag-overview.md](docs/project/09-rag-overview.md) | RAG pipeline overview (gateway to 10-14) |
-| [10-rag-chunking-spec.md](docs/project/10-rag-chunking-spec.md) | Parser + hierarchical chunking + chunk metadata |
-| [11-rag-retrieval-ranking-spec.md](docs/project/11-rag-retrieval-ranking-spec.md) | Active filter, hybrid retrieval, scoring, rerank |
-| [12-citation-verification-spec.md](docs/project/12-citation-verification-spec.md) | Citation schema, verifier status, claim-source checking |
-| [13-rag-prompt-guardrail-spec.md](docs/project/13-rag-prompt-guardrail-spec.md) | Prompt contract, disclaimer, out-of-scope, injection |
-| [14-rag-evaluation-dataset.md](docs/project/14-rag-evaluation-dataset.md) | Golden dataset, RAGAS metrics, release gate |
-
-Supporting diagram (referenced by 05 / 06):
-
-| Document | Purpose |
-|---|---|
-| [architecture_diagram.md](docs/architecture_diagram.md) | Mermaid diagrams — system overview, LangGraph flow, deployment topology |
+| [01-product-scope-and-corpus.md](docs/project/01-product-scope-and-corpus.md) | Phạm vi, persona và điều kiện corpus |
+| [02-ui-workflows.md](docs/project/02-ui-workflows.md) | Các màn hình và luồng người dùng/admin |
+| [03-api-spec.md](docs/project/03-api-spec.md) | Endpoint và contract request/response |
+| [04-architecture.md](docs/project/04-architecture.md) | Thành phần và luồng dữ liệu |
+| [05-database-schema.md](docs/project/05-database-schema.md) | Schema và migration PostgreSQL |
+| [06-deployment-operations.md](docs/project/06-deployment-operations.md) | Cấu hình, storage, backup và triển khai |
+| [07-testing-strategy.md](docs/project/07-testing-strategy.md) | Test, golden dataset và release gate |
+| [08-rag-overview.md](docs/project/08-rag-overview.md) | Luồng RAG và nguyên tắc retrieval |
+| [09-rag-chunking-spec.md](docs/project/09-rag-chunking-spec.md) | Parse, cấu trúc pháp lý và chunking |
+| [10-rag-retrieval-ranking-spec.md](docs/project/10-rag-retrieval-ranking-spec.md) | Eligibility, hybrid search, ranking và citation |
+| [11-rag-guardrail-spec.md](docs/project/11-rag-guardrail-spec.md) | Prompt, disclaimer, scope và injection |
+| [12-security-rbac.md](docs/project/12-security-rbac.md) | Authentication, authorization và dữ liệu nhạy cảm |
+| [13-kb-workflow.md](docs/project/13-kb-workflow.md) | Upload, review, publish và suspend |
+| [14-observability.md](docs/project/14-observability.md) | Logs, traces và quality operations |
 
 ## Development Commands
 
 ```bash
-make run        # uvicorn app.main:app --reload --port 8000
-make test       # pytest tests/ -v
-make lint       # ruff check app/ tests/
-make format     # ruff format app/ tests/
-make typecheck  # mypy app/
-make check      # lint + format + test
+\.venv\Scripts\python.exe -m pytest app/backend/tests -q
+cd app/frontend
+npm run lint
+npm run build
 ```
 
 API docs: `http://localhost:8000/docs`.

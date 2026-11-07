@@ -15,13 +15,13 @@ import {
 
 import { PageFrame } from '../ui';
 import {
-    KbV2DuplicateSourceError,
+    LegalKbDuplicateSourceError,
     createDocumentRelationProposal,
     deleteDocumentRelation,
     downloadAdminSource,
     fetchPublishedDocumentDetail,
     fetchPublishedDocuments,
-    reviewKbV2Summary,
+    reviewLegalKbSummary,
     reviewDocumentRelation,
     type PublishedDocumentDetailResponse,
     type PublishedDocumentListItem,
@@ -29,7 +29,7 @@ import {
     updateDocumentRelation,
     updatePublishedDocument,
     updatePublishedDocumentStatus,
-    uploadKbV2ReplacementRevision,
+    uploadLegalKbReplacementRevision,
 } from '../../lib/api';
 
 const HITL_REVIEW_SEARCH_KEY = 'hitl-review-search-prefill';
@@ -360,7 +360,7 @@ function standardSummaryContent(detail: PublishedDocumentDetailResponse) {
 }
 
 function sourceDownloadPath(detail: PublishedDocumentDetailResponse) {
-    return `/api/v1/admin/kb-v2/revisions/${detail.revision.revision_id}/source`;
+    return `/api/v1/admin/legal-kb/revisions/${detail.revision.revision_id}/source`;
 }
 
 function relationDisplayText(
@@ -586,7 +586,7 @@ export default function ViewKB({ activeView }: { activeView: string }) {
         setReplacementUploading(true);
         setReplacementMessage(null);
         try {
-            const response = await uploadKbV2ReplacementRevision(replacementDraft.documentId, {
+            const response = await uploadLegalKbReplacementRevision(replacementDraft.documentId, {
                 file: replacementDraft.file,
                 title: replacementDraft.title,
                 source_url: replacementDraft.sourceUrl,
@@ -606,7 +606,7 @@ export default function ViewKB({ activeView }: { activeView: string }) {
             await loadDocuments(page);
             openReviewWorkspace(undefined, response.revision.revision_id);
         } catch (err) {
-            if (err instanceof KbV2DuplicateSourceError && err.revisionId) {
+            if (err instanceof LegalKbDuplicateSourceError && err.revisionId) {
                 setReplacementMessage(`${err.message} Hệ thống sẽ mở hồ sơ đã có trong Duyệt văn bản để bạn kiểm tra tiếp.`);
                 openReviewWorkspace(undefined, err.revisionId);
                 return;
@@ -661,7 +661,7 @@ export default function ViewKB({ activeView }: { activeView: string }) {
                 currentDetail?.summary?.summary_id
                 && draft.summary.trim() !== standardSummaryContent(currentDetail).trim()
             ) {
-                await reviewKbV2Summary(currentDetail.summary.summary_id, {
+                await reviewLegalKbSummary(currentDetail.summary.summary_id, {
                     decision: 'approved',
                     content: draft.summary.trim(),
                 });

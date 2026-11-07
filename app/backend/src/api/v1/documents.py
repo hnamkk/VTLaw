@@ -12,24 +12,24 @@ from sqlalchemy.orm import selectinload
 
 from src.api.v1.schemas import (
     DocumentsResponse,
-    KbV2DocumentSummaryOut,
-    KbV2DynamicSummaryRequest,
-    KbV2HistoricalCitationOut,
-    KbV2PublicDocumentDetailOut,
     LegalDocumentOut,
+    LegalKbDocumentSummaryOut,
+    LegalKbDynamicSummaryRequest,
+    LegalKbHistoricalCitationOut,
+    LegalKbPublicDocumentDetailOut,
     PublicDocumentRelationOut,
 )
 from src.core.config import settings
 from src.db.session import get_session
-from src.kb_v2.summaries import build_dynamic_summary, get_standard_summary
-from src.models.kb_v2 import (
-    KbV2DocumentRelation,
-    KbV2DocumentRevision,
-    KbV2LegalDocument,
-    KbV2RetrievalUnit,
-    KbV2SourceAsset,
+from src.legal_kb.review import relation_review_status
+from src.legal_kb.summaries import build_dynamic_summary, get_standard_summary
+from src.models.legal_kb import (
+    LegalKbDocument,
+    LegalKbRelation,
+    LegalKbRetrievalUnit,
+    LegalKbRevision,
+    LegalKbSourceAsset,
 )
-from src.kb_v2.review import relation_review_status
 from src.storage.object_storage import get_object_storage, is_object_uri
 
 router = APIRouter(tags=["documents"])
@@ -49,12 +49,12 @@ _PUBLIC_DOCUMENT_FALLBACK_TITLE = "Văn bản đã công bố"
 _PUBLIC_UNKNOWN_ISSUER = "Chưa cập nhật"
 
 
-def _ensure_kb_v2_public_enabled() -> None:
+def _ensure_legal_kb_public_enabled() -> None:
     """Compat shim after KB cutover: public document routes are always available."""
     return None
 
 
-def _safe_kb_v2_source_path(source_path: str | None) -> Path | None:
+def _safe_legal_kb_source_path(source_path: str | None) -> Path | None:
     if not source_path:
         return None
     root = Path(settings.kb_local_storage_path).resolve()
@@ -72,62 +72,62 @@ def _source_media_type(file_name: str | None) -> str:
 def _latest_published_revision_subquery():
     return (
         select(
-            KbV2DocumentRevision.document_id.label("document_id"),
-            func.max(KbV2DocumentRevision.revision_number).label("revision_number"),
+            LegalKbRevision.document_id.label("document_id"),
+            func.max(LegalKbRevision.revision_number).label("revision_number"),
         )
-        .where(KbV2DocumentRevision.publication_status == "published")
-        .group_by(KbV2DocumentRevision.document_id)
+        .where(LegalKbRevision.publication_status == "published")
+        .group_by(LegalKbRevision.document_id)
         .subquery()
     )
 
 
-async def _get_kb_v2_public_document(
+async def _get_legal_kb_public_document(
     db_session: AsyncSession,
     document_id: str,
 ):
     latest_published = _latest_published_revision_subquery()
     result = await db_session.execute(
-        select(KbV2LegalDocument, KbV2DocumentRevision, KbV2SourceAsset)
+        select(LegalKbDocument, LegalKbRevision, LegalKbSourceAsset)
         .join(
             latest_published,
-            latest_published.c.document_id == KbV2LegalDocument.document_id,
+            latest_published.c.document_id == LegalKbDocument.document_id,
         )
         .join(
-            KbV2DocumentRevision,
+            LegalKbRevision,
             and_(
-                KbV2DocumentRevision.document_id == latest_published.c.document_id,
-                KbV2DocumentRevision.revision_number == latest_published.c.revision_number,
+                LegalKbRevision.document_id == latest_published.c.document_id,
+                LegalKbRevision.revision_number == latest_published.c.revision_number,
             ),
         )
-        .outerjoin(KbV2SourceAsset, KbV2SourceAsset.asset_id == KbV2DocumentRevision.source_asset_id)
+        .outerjoin(LegalKbSourceAsset, LegalKbSourceAsset.asset_id == LegalKbRevision.source_asset_id)
         .where(
-            KbV2LegalDocument.document_id == document_id,
-            KbV2LegalDocument.legal_status == "active",
+            LegalKbDocument.document_id == document_id,
+            LegalKbDocument.legal_status == "active",
         )
         .limit(1)
     )
     return result.one_or_none()
 
 
-async def _get_kb_v2_historical_citation(
+async def _get_legal_kb_historical_citation(
     db_session: AsyncSession,
     retrieval_unit_id: str,
 ):
     result = await db_session.execute(
-        select(KbV2RetrievalUnit, KbV2LegalDocument, KbV2DocumentRevision, KbV2SourceAsset)
-        .join(KbV2LegalDocument, KbV2LegalDocument.document_id == KbV2RetrievalUnit.document_id)
-        .join(KbV2DocumentRevision, KbV2DocumentRevision.revision_id == KbV2RetrievalUnit.revision_id)
-        .outerjoin(KbV2SourceAsset, KbV2SourceAsset.asset_id == KbV2DocumentRevision.source_asset_id)
+        select(LegalKbRetrievalUnit, LegalKbDocument, LegalKbRevision, LegalKbSourceAsset)
+        .join(LegalKbDocument, LegalKbDocument.document_id == LegalKbRetrievalUnit.document_id)
+        .join(LegalKbRevision, LegalKbRevision.revision_id == LegalKbRetrievalUnit.revision_id)
+        .outerjoin(LegalKbSourceAsset, LegalKbSourceAsset.asset_id == LegalKbRevision.source_asset_id)
         .where(
-            KbV2RetrievalUnit.retrieval_unit_id == retrieval_unit_id,
-            KbV2DocumentRevision.publication_status.in_(("published", "suspended", "archived")),
+            LegalKbRetrievalUnit.retrieval_unit_id == retrieval_unit_id,
+            LegalKbRevision.publication_status.in_(("published", "suspended", "archived")),
         )
         .limit(1)
     )
     return result.one_or_none()
 
 
-def _serve_kb_v2_source(asset: KbV2SourceAsset):
+def _serve_legal_kb_source(asset: LegalKbSourceAsset):
     media_type = _source_media_type(asset.original_filename)
     disposition = "inline" if media_type == "application/pdf" else "attachment"
     headers = {
@@ -145,7 +145,7 @@ def _serve_kb_v2_source(asset: KbV2SourceAsset):
             headers=headers,
         )
 
-    source_path = _safe_kb_v2_source_path(asset.storage_uri)
+    source_path = _safe_legal_kb_source_path(asset.storage_uri)
     if source_path is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_PUBLIC_SOURCE_NOT_FOUND_DETAIL)
 
@@ -158,11 +158,11 @@ def _serve_kb_v2_source(asset: KbV2SourceAsset):
     )
 
 
-def _serialize_kb_v2_public_item(
+def _serialize_legal_kb_public_item(
     *,
-    document: KbV2LegalDocument,
-    revision: KbV2DocumentRevision,
-    source_asset: KbV2SourceAsset | None,
+    document: LegalKbDocument,
+    revision: LegalKbRevision,
+    source_asset: LegalKbSourceAsset | None,
     relations: list[PublicDocumentRelationOut] | None = None,
 ) -> LegalDocumentOut:
     return LegalDocumentOut(
@@ -188,7 +188,7 @@ def _serialize_kb_v2_public_item(
 
 
 def _serialize_public_relation(
-    relation: KbV2DocumentRelation,
+    relation: LegalKbRelation,
     *,
     document_id: str,
 ) -> PublicDocumentRelationOut:
@@ -216,15 +216,15 @@ async def _public_relations_by_document(
 
     rows = (
         await db_session.execute(
-            select(KbV2DocumentRelation)
+            select(LegalKbRelation)
             .options(
-                selectinload(KbV2DocumentRelation.source_document),
-                selectinload(KbV2DocumentRelation.target_document),
+                selectinload(LegalKbRelation.source_document),
+                selectinload(LegalKbRelation.target_document),
             )
             .where(
                 or_(
-                    KbV2DocumentRelation.source_document_id.in_(document_ids),
-                    KbV2DocumentRelation.target_document_id.in_(document_ids),
+                    LegalKbRelation.source_document_id.in_(document_ids),
+                    LegalKbRelation.target_document_id.in_(document_ids),
                 )
             )
         )
@@ -261,47 +261,47 @@ async def list_documents(
     db_session: AsyncSession = Depends(get_session),
 ):
     """GET /api/v1/documents."""
-    _ensure_kb_v2_public_enabled()
+    _ensure_legal_kb_public_enabled()
     latest_published = _latest_published_revision_subquery()
     query = (
-        select(KbV2LegalDocument, KbV2DocumentRevision, KbV2SourceAsset)
+        select(LegalKbDocument, LegalKbRevision, LegalKbSourceAsset)
         .join(
             latest_published,
-            latest_published.c.document_id == KbV2LegalDocument.document_id,
+            latest_published.c.document_id == LegalKbDocument.document_id,
         )
         .join(
-            KbV2DocumentRevision,
+            LegalKbRevision,
             and_(
-                KbV2DocumentRevision.document_id == latest_published.c.document_id,
-                KbV2DocumentRevision.revision_number == latest_published.c.revision_number,
+                LegalKbRevision.document_id == latest_published.c.document_id,
+                LegalKbRevision.revision_number == latest_published.c.revision_number,
             ),
         )
-        .outerjoin(KbV2SourceAsset, KbV2SourceAsset.asset_id == KbV2DocumentRevision.source_asset_id)
-        .where(KbV2LegalDocument.legal_status == "active")
+        .outerjoin(LegalKbSourceAsset, LegalKbSourceAsset.asset_id == LegalKbRevision.source_asset_id)
+        .where(LegalKbDocument.legal_status == "active")
     )
 
     if q:
         keyword = q.strip()
         query = query.where(
             or_(
-                KbV2LegalDocument.title.ilike(f"%{keyword}%"),
-                KbV2LegalDocument.document_number.ilike(f"%{keyword}%"),
+                LegalKbDocument.title.ilike(f"%{keyword}%"),
+                LegalKbDocument.document_number.ilike(f"%{keyword}%"),
             )
         )
     if doc_type:
-        query = query.where(KbV2LegalDocument.document_type == doc_type.strip())
+        query = query.where(LegalKbDocument.document_type == doc_type.strip())
     if issuer:
-        query = query.where(KbV2LegalDocument.issuing_authority.ilike(f"%{issuer.strip()}%"))
+        query = query.where(LegalKbDocument.issuing_authority.ilike(f"%{issuer.strip()}%"))
     if year:
-        query = query.where(extract("year", KbV2LegalDocument.effective_date) == year)
+        query = query.where(extract("year", LegalKbDocument.effective_date) == year)
 
     count_result = await db_session.execute(select(func.count()).select_from(query.subquery()))
     total = count_result.scalar() or 0
     rows = (
         await db_session.execute(
             query.order_by(
-                KbV2LegalDocument.effective_date.desc().nullslast(),
-                KbV2LegalDocument.title.asc().nullslast(),
+                LegalKbDocument.effective_date.desc().nullslast(),
+                LegalKbDocument.title.asc().nullslast(),
             )
             .offset((page - 1) * page_size)
             .limit(page_size)
@@ -314,7 +314,7 @@ async def list_documents(
 
     return DocumentsResponse(
         items=[
-            _serialize_kb_v2_public_item(
+            _serialize_legal_kb_public_item(
                 document=document,
                 revision=revision,
                 source_asset=source_asset,
@@ -328,18 +328,18 @@ async def list_documents(
     )
 
 
-@router.get("/documents/{document_id}", response_model=KbV2PublicDocumentDetailOut)
-async def get_kb_v2_public_document_detail(
+@router.get("/documents/{document_id}", response_model=LegalKbPublicDocumentDetailOut)
+async def get_legal_kb_public_document_detail(
     document_id: str,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_public_enabled()
-    row = await _get_kb_v2_public_document(db_session, document_id)
+    _ensure_legal_kb_public_enabled()
+    row = await _get_legal_kb_public_document(db_session, document_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_PUBLIC_DOCUMENT_NOT_FOUND_DETAIL)
 
     document, revision, source_asset = row
-    return KbV2PublicDocumentDetailOut(
+    return LegalKbPublicDocumentDetailOut(
         document_id=document.document_id,
         revision_id=revision.revision_id,
         title=document.title,
@@ -365,28 +365,28 @@ async def view_document_source(
     db_session: AsyncSession = Depends(get_session),
 ):
     """Serve the approved source file without exposing its storage path."""
-    _ensure_kb_v2_public_enabled()
-    row = await _get_kb_v2_public_document(db_session, doc_id)
+    _ensure_legal_kb_public_enabled()
+    row = await _get_legal_kb_public_document(db_session, doc_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_PUBLIC_SOURCE_NOT_FOUND_DETAIL)
     _, _, source_asset = row
     if source_asset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_PUBLIC_SOURCE_NOT_FOUND_DETAIL)
-    return _serve_kb_v2_source(source_asset)
+    return _serve_legal_kb_source(source_asset)
 
 
-@router.get("/documents/citations/{retrieval_unit_id}", response_model=KbV2HistoricalCitationOut)
-async def get_kb_v2_historical_citation(
+@router.get("/documents/citations/{retrieval_unit_id}", response_model=LegalKbHistoricalCitationOut)
+async def get_legal_kb_historical_citation(
     retrieval_unit_id: str,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_public_enabled()
-    row = await _get_kb_v2_historical_citation(db_session, retrieval_unit_id)
+    _ensure_legal_kb_public_enabled()
+    row = await _get_legal_kb_historical_citation(db_session, retrieval_unit_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_HISTORICAL_CITATION_NOT_FOUND_DETAIL)
 
     retrieval_unit, document, revision, source_asset = row
-    return KbV2HistoricalCitationOut(
+    return LegalKbHistoricalCitationOut(
         retrieval_unit_id=retrieval_unit.retrieval_unit_id,
         document_id=document.document_id,
         revision_id=revision.revision_id,
@@ -407,30 +407,30 @@ async def get_kb_v2_historical_citation(
 
 
 @router.get("/documents/citations/{retrieval_unit_id}/source")
-async def view_kb_v2_historical_citation_source(
+async def view_legal_kb_historical_citation_source(
     retrieval_unit_id: str,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_public_enabled()
-    row = await _get_kb_v2_historical_citation(db_session, retrieval_unit_id)
+    _ensure_legal_kb_public_enabled()
+    row = await _get_legal_kb_historical_citation(db_session, retrieval_unit_id)
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_HISTORICAL_CITATION_NOT_FOUND_DETAIL)
     _, _, _, source_asset = row
     if source_asset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_PUBLIC_SOURCE_NOT_FOUND_DETAIL)
-    return _serve_kb_v2_source(source_asset)
+    return _serve_legal_kb_source(source_asset)
 
 
-@router.get("/documents/{document_id}/summary", response_model=KbV2DocumentSummaryOut)
-async def get_kb_v2_document_summary(
+@router.get("/documents/{document_id}/summary", response_model=LegalKbDocumentSummaryOut)
+async def get_legal_kb_document_summary(
     document_id: str,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_public_enabled()
-    if await _get_kb_v2_public_document(db_session, document_id) is None:
+    _ensure_legal_kb_public_enabled()
+    if await _get_legal_kb_public_document(db_session, document_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_PUBLIC_DOCUMENT_NOT_FOUND_DETAIL)
     summary = await get_standard_summary(db_session, document_id=document_id)
-    return KbV2DocumentSummaryOut(
+    return LegalKbDocumentSummaryOut(
         document_id=summary.document_id,
         revision_id=summary.revision_id,
         summary_type="standard",
@@ -438,14 +438,14 @@ async def get_kb_v2_document_summary(
     )
 
 
-@router.post("/documents/{document_id}/summary/dynamic", response_model=KbV2DocumentSummaryOut)
-async def create_kb_v2_dynamic_summary(
+@router.post("/documents/{document_id}/summary/dynamic", response_model=LegalKbDocumentSummaryOut)
+async def create_legal_kb_dynamic_summary(
     document_id: str,
-    request: KbV2DynamicSummaryRequest,
+    request: LegalKbDynamicSummaryRequest,
     db_session: AsyncSession = Depends(get_session),
 ):
-    _ensure_kb_v2_public_enabled()
-    if await _get_kb_v2_public_document(db_session, document_id) is None:
+    _ensure_legal_kb_public_enabled()
+    if await _get_legal_kb_public_document(db_session, document_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_PUBLIC_DOCUMENT_NOT_FOUND_DETAIL)
     llm = ChatOpenAI(
         model=settings.MODEL_NAME,
@@ -460,7 +460,7 @@ async def create_kb_v2_dynamic_summary(
         query_date=request.query_date or date.today(),
         llm=llm,
     )
-    return KbV2DocumentSummaryOut(
+    return LegalKbDocumentSummaryOut(
         document_id=document_id,
         revision_id="dynamic",
         summary_type="dynamic",

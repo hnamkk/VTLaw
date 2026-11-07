@@ -298,8 +298,8 @@ def test_number_alias_resolves_without_inferred_document_type():
     assert resolved["number:02/VBHN-BGTVT"].doc_id == "doc-1"
 
 
-def test_eval_runner_uses_current_kb_v2_document_model_only():
-    assert hasattr(run_eval_module, "KbV2LegalDocument")
+def test_eval_runner_uses_current_legal_kb_document_model_only():
+    assert hasattr(run_eval_module, "LegalKbDocument")
     assert not hasattr(run_eval_module, "LegalDocument")
 
 

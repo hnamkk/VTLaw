@@ -310,7 +310,7 @@ async def test_user_token_cannot_call_admin_endpoint(client):
     _override_session(session)
     try:
         response = await client.get(
-            "/api/v1/admin/kb-v2/revisions?page=1&page_size=1",
+            "/api/v1/admin/legal-kb/revisions?page=1&page_size=1",
             headers={"Authorization": f"Bearer {token}"},
         )
     finally:

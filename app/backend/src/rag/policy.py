@@ -22,7 +22,7 @@ INSUFFICIENT_REASONS = {
     "faithfulness_below_floor",
     "hallucination_detected",
     "inactive_citation",
-    "kb_v2_document_not_found",
+    "legal_kb_document_not_found",
     "low_confidence_retrieval",
     "missing_citation",
     "no_supported_citation",
@@ -143,7 +143,7 @@ def classify_answer_mode(
         return "clarification_needed"
     if guardrail_reason in MULTIPLE_POSSIBILITIES_REASONS:
         return "multiple_possibilities"
-    if guardrail_reason == "kb_v2_standard_summary":
+    if guardrail_reason == "legal_kb_standard_summary":
         return (
             "insufficient_evidence"
             if stripped.startswith(_SUMMARY_MISSING_PREFIX)

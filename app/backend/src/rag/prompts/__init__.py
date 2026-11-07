@@ -169,7 +169,6 @@ INJECTION_SIGNALS = [
     "không cần citation",
     "không cần trích dẫn",
     "bịa điều nếu không biết",
-    "tự do sáng tạo",
     "trả lời như luật sư chính thức",
     "dùng kiến thức ngoài kb",
     "no need to cite",
@@ -182,10 +181,7 @@ INJECTION_SIGNALS = [
     "bo qua kb",
     "dung tu tri nho",
     "in ra prompt he thong",
-    "nguon pending review",
     "tu tao dieu",
-    "gia vo",
-    "giả vờ",
 ]
 
 _OVERRIDE_ACTIONS = ("bo qua", "disregard", "ignore", "vo hieu hoa")
@@ -218,12 +214,17 @@ _ASSISTANT_REFERENCES = (
     "tro ly ai",
 )
 _IDENTITY_PHRASES = (
+    "gioi thieu ve minh",
+    "gioi thieu ve ban",
+    "ban la gi",
     "ban la ai",
     "ai la ban",
     "ban ten gi",
     "day la ai",
 )
 _CAPABILITY_PHRASES = (
+    "giup toi duoc gi",
+    "ban biet lam gi",
     "ban lam duoc gi",
     "ban co the lam gi",
     "ban giup duoc gi",
@@ -298,7 +299,11 @@ def detect_injection(text: str) -> bool:
     if attempts_override and targets_guardrail:
         return True
 
-    is_request = any(normalized.startswith(marker) for marker in _REQUEST_MARKERS)
+    is_request = any(f" {marker}" in f" {normalized} " for marker in _REQUEST_MARKERS)
+    if is_request and any(term in normalized for term in ("pending review", "chua duyet", "chua duoc duyet")) and any(
+        action in normalized for action in ("tra loi bang", "tra loi tu", "su dung nguon", "dung nguon")
+    ):
+        return True
     requests_fabrication = any(action in normalized for action in _FABRICATION_ACTIONS)
     if is_request and requests_fabrication:
         return True
@@ -313,6 +318,12 @@ def classify_conversational_intent(text: str) -> tuple[str, str] | None:
     """Handle non-legal assistant/about-chatbot intents before retrieval."""
     normalized = _normalize_guardrail_text(text)
     if not normalized:
+        return None
+
+    # A social preamble must not swallow the legal question that follows it.
+    from src.rag.retrieval.scope import _domain_signals, is_explicit_legal_document_query
+
+    if _domain_signals(text)[0] or is_explicit_legal_document_query(text):
         return None
 
     padded = f" {normalized} "
@@ -374,10 +385,10 @@ def format_rag_prompt(
     elif query_intent == "procedure":
         intent_instructions = (
             "\n- Đây là câu hỏi về thủ tục. Hãy sắp xếp câu trả lời theo thứ tự:"
-            " Dieu kien, giay to can co, co quan tiep nhan, thoi han, cach thuc hien"
-            " va luu y quan trong neu du lieu co neu."
-            " Neu nguoi dung hoi kieu `toi nen lam gi`, hay chuyen thanh checklist"
-            " khach quan theo quy dinh, khong dua ra khuyen nghi ca nhan hoa."
+            " điều kiện, giấy tờ cần có, cơ quan tiếp nhận, thời hạn, cách thực hiện"
+            " và lưu ý quan trọng nếu dữ liệu có nêu."
+            " Nếu người dùng hỏi kiểu ‘tôi nên làm gì’, hãy chuyển thành checklist"
+            " khách quan theo quy định, không đưa ra khuyến nghị cá nhân hóa."
         )
 
     return RAG_PROMPT_TEMPLATE.format(
@@ -401,24 +412,24 @@ def format_repealed_notice(
         expiry_date=expiry_date,
         replacement_document=replacement,
     )
-PROMPT_INJECTION_TEMPLATE = f"""Xin l???i, t??i kh??ng th??? l??m theo y??u c???u b??? qua quy t???c tra c???u v?? ki???m ch???ng ngu???n.
+PROMPT_INJECTION_TEMPLATE = f"""Tôi có thể giúp bạn tra cứu, nhưng cần giữ việc kiểm chứng nguồn và trích dẫn căn cứ.
 
-T??i ch??? h??? tr??? tra c???u quy ?????nh giao th??ng v???n t???i ???????ng b??? d???a tr??n kho d??? li???u ???? ???????c duy???t. T??i kh??ng th??? b??? qua y??u c???u n??u c??n c???, th??m l??u ?? ph??p l?? ho???c t??? d??ng th??ng tin ngo??i d??? li???u ??ang c??.
+Tôi chỉ sử dụng dữ liệu đã được duyệt và sẽ nói rõ khi chưa đủ căn cứ. Tôi không thể bịa quy định hoặc tự nhận là cơ quan có thẩm quyền.
 
-B???n c?? th??? h???i l???i v??? m???c ph???t, gi???y ph??p, ph?? hi???u, ????ng ki???m ho???c ??i???u ki???n kinh doanh v???n t???i.
+Bạn có thể nêu câu hỏi về giao thông đường bộ, loại phương tiện và tình huống cần tra cứu.
 
 {LEGAL_DISCLAIMER}"""
 
-LEGAL_ADVICE_REDIRECT_TEMPLATE = f"""Toi khong the dua ra khuyen nghi chien luoc phap ly ca nhan hoa cho truong hop nay.
+LEGAL_ADVICE_REDIRECT_TEMPLATE = f"""Tôi không thể đưa ra khuyến nghị chiến lược pháp lý cá nhân hóa cho trường hợp này.
 
-Toi co the ho tro ban theo huong khach quan hon:
-1. Tra cuu quy dinh hien hanh, quyen va nghia vu chung lien quan.
-2. Lap checklist thu tuc neu ban muon biet ve ho so, co quan tiep nhan, thoi han, trinh tu hoac dieu kien.
+Tôi có thể hỗ trợ bạn theo hướng khách quan hơn:
+1. Tra cứu quy định hiện hành, quyền và nghĩa vụ chung liên quan.
+2. Lập checklist thủ tục về hồ sơ, cơ quan tiếp nhận, thời hạn, trình tự hoặc điều kiện.
 
-Ban co the hoi lai theo mot trong cac cach sau:
-- "Thu tuc khieu nai quyet dinh xu phat giao thong can nhung ho so gi, nop o dau, thoi han bao lau?"
-- "Quy dinh hien hanh ve hanh vi nay la gi?"
-- "Neu muon thuc hien thu tuc nay thi can cac buoc nao?"
+Bạn có thể hỏi lại theo một trong các cách sau:
+- “Thủ tục khiếu nại quyết định xử phạt giao thông cần những hồ sơ gì, nộp ở đâu, thời hạn bao lâu?”
+- “Quy định hiện hành về hành vi này là gì?”
+- “Nếu muốn thực hiện thủ tục này thì cần các bước nào?”
 
 {LEGAL_DISCLAIMER}"""
 

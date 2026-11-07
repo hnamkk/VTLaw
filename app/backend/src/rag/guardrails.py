@@ -12,6 +12,7 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Iterable
 
+from src.rag.policy import is_legal_advice_strategy
 from src.rag.prompts import (
     INSUFFICIENT_CONTEXT_TEMPLATE,
     LEGAL_ADVICE_REDIRECT_TEMPLATE,
@@ -21,12 +22,10 @@ from src.rag.prompts import (
     classify_conversational_intent,
     detect_injection,
 )
-from src.rag.policy import is_legal_advice_strategy
 from src.schemas.rag import Citation
 
 SUPPORTED_CITATION_STATUSES = {"verified", "partial"}
 _VAGUE_CLARIFICATION_PHRASES = (
-    "giay phep lai xe hang a1 ap dung theo van ban nao",
     "con truong hop nay",
     "con cai do",
     "con dia diem nop",
@@ -35,41 +34,6 @@ _VAGUE_CLARIFICATION_PHRASES = (
     "neu toi chi noi bien so xe",
     "neu khong noi loai xe",
     "neu toi khong mo ta hanh vi vi pham",
-)
-_KNOWN_INSUFFICIENT_CONTEXT_PHRASES = (
-    "admin duyet",
-    "chua duoc admin duyet",
-    "dang pending review",
-    "pending review",
-    "quan he sua doi chua duoc duyet",
-    "van ban moi chua duoc admin duyet",
-    "van ban dang pending review",
-    "van ban het hieu luc co duoc dua vao provision citation",
-    "retrieval chi co van ban da het hieu luc",
-    "phap luat tai ngay 30 06 2026",
-    "ngay 30 06 2026",
-    "tai ngay 2026 07 03",
-    "luat 118 2025 qh15 sua doi nhung quan he sua doi chua duoc duyet",
-    "nghi dinh 94 2026 nd cp",
-    "luat 118 2025 qh15",
-    "bien cam dung",
-    "mo ta chinh xac mau sac",
-    "phi qua moi tram bot",
-    "phi bot",
-    "tram bot",
-    "drone giao hang",
-    "qua tai toi da",
-    "chinh xac bao nhieu kg",
-    "vi tri x tren tuyen y",
-    "khong noi tuyen duong",
-    "bi phat chinh xac bao nhieu",
-    "luat cong nghiep cong nghe so",
-    "muc phi dang kiem cho moi loai xe",
-    "muc phi dang kiem",
-    "bien bao moi nhat",
-    "tuyen cao toc cu the hom nay",
-    "gia ve xe khach tuyen cu the",
-    "hang xe tu nhan co dang con giay phep",
 )
 _KNOWN_OUT_OF_SCOPE_PHRASES = (
     "gia ve may bay",
@@ -120,13 +84,6 @@ def evaluate_input_guardrail(query: str, *, query_intent: str | None = None) -> 
             reason="out_of_scope",
             safe_response=OUT_OF_SCOPE_TEMPLATE,
         )
-    if _known_insufficient_context(query):
-        return GuardrailDecision(
-            allowed=False,
-            stage="input",
-            reason="no_supported_citation",
-            safe_response=INSUFFICIENT_CONTEXT_TEMPLATE,
-        )
     if _needs_query_clarification(query):
         return GuardrailDecision(
             allowed=False,
@@ -141,14 +98,7 @@ def _needs_query_clarification(query: str) -> bool:
     normalized = _normalize_query_text(query)
     if not normalized:
         return True
-    return any(phrase in normalized for phrase in _VAGUE_CLARIFICATION_PHRASES)
-
-
-def _known_insufficient_context(query: str) -> bool:
-    normalized = _normalize_query_text(query)
-    if not normalized:
-        return False
-    return any(phrase in normalized for phrase in _KNOWN_INSUFFICIENT_CONTEXT_PHRASES)
+    return normalized in _VAGUE_CLARIFICATION_PHRASES
 
 
 def _known_out_of_scope(query: str) -> bool:

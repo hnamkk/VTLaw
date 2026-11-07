@@ -258,6 +258,32 @@ class TestScopeClassifier:
 # Hybrid merge + scoring
 # --------------------------------------------------------------------------- #
 class TestHybridMerge:
+    @pytest.mark.asyncio
+    async def test_vector_search_applies_eligibility_before_ranking(self):
+        from sqlalchemy.dialects import postgresql
+
+        from src.rag.retrieval.hybrid_legal import _vector_search
+
+        session = SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(all=lambda: [])))
+        result = await _vector_search(
+            session,
+            query_embedding=[0.0],
+            query_date=date(2026, 1, 1),
+            top_k=5,
+            document_ids=None,
+        )
+
+        statement = session.execute.await_args.args[0]
+        compiled = statement.compile(dialect=postgresql.dialect())
+        sql = str(compiled).lower()
+        assert result == []
+        assert "publication_status =" in sql
+        assert "legal_status =" in sql
+        assert "answerable_status =" in sql
+        assert "published" in compiled.params.values()
+        assert list(compiled.params.values()).count("active") >= 2
+        assert sql.index("where") < sql.index("order by")
+
     @pytest.mark.parametrize(
         ("query", "expected"),
         [

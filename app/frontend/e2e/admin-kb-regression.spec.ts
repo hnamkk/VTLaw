@@ -94,11 +94,11 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('Kho và Duyệt giữ relation_count đồng nhất cho toàn bộ dữ liệu giao nhau', async ({ page }) => {
-  const repository = await fetchAllPages(page, '/api/v1/admin/kb-v2/documents');
+  const repository = await fetchAllPages(page, '/api/v1/admin/legal-kb/documents');
 
   const revisions = await fetchAllByStatus(
     page,
-    '/api/v1/admin/kb-v2/revisions',
+    '/api/v1/admin/legal-kb/revisions',
     ['draft', 'published', 'suspended', 'archived'],
   );
   const repositoryByDocument = new Map(repository.map((item) => [item.document_id, item]));
@@ -141,7 +141,7 @@ test('modal lưu dùng xác nhận tùy biến và không gọi window.confirm',
 });
 
 test('modal duyệt chỉ hiển thị một lần khi cảnh báo bộ tách trùng với điều kiện chặn', async ({ page }) => {
-  await page.route(/\/api\/v1\/admin\/kb-v2\/revisions\/[^/?]+$/, async (route) => {
+  await page.route(/\/api\/v1\/admin\/legal-kb\/revisions\/[^/?]+$/, async (route) => {
     const upstream = await route.fetch();
     const body = await upstream.json();
     const duplicateWarning = 'parser emitted a technical warning';
@@ -204,18 +204,18 @@ test('submit upload hiển thị tiến trình mà không ghi dữ liệu thật
   await navigateToView(page, 'view-hitl');
   await page.getByRole('button', { name: 'Thêm văn bản' }).click();
 
-  await page.route('**/api/v1/admin/kb-v2/revisions/upload', async (route) => {
+  await page.route('**/api/v1/admin/legal-kb/revisions/upload', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     await route.abort('aborted');
   });
-  await page.locator('#kbv2-file').setInputFiles({
+  await page.locator('#legal-kb-file').setInputFiles({
     name: 'e2e-progress-only.docx',
     mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     buffer: Buffer.from('E2E progress fixture; never sent to backend.'),
   });
-  await page.locator('#kbv2-title').fill('Hồ sơ kiểm tra tiến trình E2E');
-  await page.locator('#kbv2-source-url').fill('https://example.invalid/e2e-progress-only');
-  await page.locator('#kbv2-note').fill('Chỉ kiểm tra giao diện tiến trình, không ghi dữ liệu.');
+  await page.locator('#legal-kb-title').fill('Hồ sơ kiểm tra tiến trình E2E');
+  await page.locator('#legal-kb-source-url').fill('https://example.invalid/e2e-progress-only');
+  await page.locator('#legal-kb-note').fill('Chỉ kiểm tra giao diện tiến trình, không ghi dữ liệu.');
   await page.getByRole('button', { name: 'Tạo hồ sơ', exact: true }).click();
 
   await expect(page.getByLabel('Tiến trình tạo hồ sơ')).toBeVisible();
@@ -246,7 +246,7 @@ test('thay file nguồn cuộn được, khóa đóng khi xử lý và mở đú
   await expect(footer).toBeVisible();
 
   const expectedRevisionId = 'e2e-replacement-revision-id';
-  await page.route('**/api/v1/admin/kb-v2/documents/*/replacement-revisions/upload', async (route) => {
+  await page.route('**/api/v1/admin/legal-kb/documents/*/replacement-revisions/upload', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 1800));
     await route.fulfill({
       status: 201,

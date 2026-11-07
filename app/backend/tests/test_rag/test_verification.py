@@ -435,10 +435,10 @@ class TestVerifyCitations:
 
         citations = citations_from_retrieval_units([inactive, duplicate_doc, active])
 
-        assert len(citations) == 1
-        assert citations[0].doc_id == "doc-1"
-        assert citations[0].chunk_id == "c1"
-        assert citations[0].article_num == 9
+        assert len(citations) == 2
+        assert {c.doc_id for c in citations} == {"doc-1"}
+        assert {c.chunk_id for c in citations} == {"c1", "c2"}
+        assert {c.article_num for c in citations} == {9, 10}
         assert citations[0].verification_status == VerificationStatus.verified
 
 

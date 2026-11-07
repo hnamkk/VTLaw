@@ -1,0 +1,48 @@
+# Demo backend only; configure the database, frontend, and object storage separately.
+# Neon, R2 and the Vercel frontend are configured separately.
+services:
+  - type: web
+    name: vtlaw-api
+    runtime: python
+    plan: free
+    rootDir: app/backend
+    buildCommand: python -m pip install -r requirements.txt
+    startCommand: python -m alembic upgrade head && python -m uvicorn src.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: CORS_ORIGINS
+        sync: false
+      - key: LANGCHAIN_TRACING_V2
+        value: "false"
+      - key: LANGFUSE_TRACING_ENABLED
+        value: "false"
+      - key: OBJECT_STORAGE_ENABLED
+        value: "true"
+      - key: OBJECT_STORAGE_PROVIDER
+        value: s3
+      - key: KB_REQUIRE_OBJECT_STORAGE
+        value: "true"
+      - key: KB_LOCAL_STORAGE_PATH
+        value: /tmp/vtlaw-kb
+      - key: S3_ENDPOINT_URL
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: MAX_CONCURRENT_UPLOADS
+        value: "1"
+      - key: MAX_UPLOAD_FILE_SIZE_MB
+        value: "16"

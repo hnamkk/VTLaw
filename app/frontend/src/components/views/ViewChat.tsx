@@ -17,7 +17,7 @@ import {
 import {
     bookmarkChatSession,
     deleteChatSession,
-    fetchKbV2HistoricalCitation,
+    fetchLegalKbHistoricalCitation,
     fetchChatSessionMessages,
     fetchChatSessions,
     getStoredAuth,
@@ -25,7 +25,7 @@ import {
     unbookmarkChatSession,
     type AuthSession,
     type ChatMessage,
-    type KbV2HistoricalCitation,
+    type LegalKbHistoricalCitation,
 } from '../../lib/api';
 
 type ChatSessionItem = {
@@ -164,7 +164,7 @@ export default function ViewChat({ activeView }: { activeView: string }) {
     const [bookmarkError, setBookmarkError] = React.useState<string | null>(null);
     const [savingBookmark, setSavingBookmark] = React.useState(false);
     const [historyCollapsed, setHistoryCollapsed] = React.useState(false);
-    const [historicalCitations, setHistoricalCitations] = React.useState<Record<string, KbV2HistoricalCitation>>({});
+    const [historicalCitations, setHistoricalCitations] = React.useState<Record<string, LegalKbHistoricalCitation>>({});
     const [historicalCitationLoading, setHistoricalCitationLoading] = React.useState<string | null>(null);
     const [historicalCitationError, setHistoricalCitationError] = React.useState<string | null>(null);
 
@@ -389,7 +389,7 @@ export default function ViewChat({ activeView }: { activeView: string }) {
         setHistoricalCitationLoading(retrievalUnitId);
         setHistoricalCitationError(null);
         try {
-            const result = await fetchKbV2HistoricalCitation(retrievalUnitId);
+            const result = await fetchLegalKbHistoricalCitation(retrievalUnitId);
             setHistoricalCitations((current) => ({ ...current, [retrievalUnitId]: result }));
         } catch (error) {
             setHistoricalCitationError(

@@ -82,9 +82,9 @@ def test_format_rag_prompt_procedure_uses_objective_checklist_instruction():
         query_intent="procedure",
     )
 
-    assert "co quan tiep nhan" in prompt
+    assert "cơ quan tiếp nhận" in prompt
     assert "checklist" in prompt.lower()
-    assert "khong dua ra khuyen nghi ca nhan hoa" in prompt.lower()
+    assert "không đưa ra khuyến nghị cá nhân hóa" in prompt.lower()
 
 
 def test_out_of_scope_template_is_user_friendly():

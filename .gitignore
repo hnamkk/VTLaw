@@ -22,6 +22,7 @@ dist/
 .coverage.*
 coverage.xml
 htmlcov/
+data
 
 # OS
 .DS_Store
@@ -51,9 +52,11 @@ backups/
 /app/backend/storage/accent_cache.json
 /app/backend/storage/*.sqlite3-*
 
-# Local KB v2 runtime storage and corpus source binaries
-app/backend/storage/kb_v2/
-corpus/kb-v2/raw-docx/
+# Local Kho văn bản runtime storage and corpus source binaries
+app/backend/storage/legal_kb/
+corpus/legal-kb/raw-docx/
+# Downloaded originals and offline archives; provenance stays in tracked notes.
+/corpus/archive/
 
 # Local audit/test artifacts
 .audit-temp/

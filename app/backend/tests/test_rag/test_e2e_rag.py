@@ -148,7 +148,7 @@ def _patch_all(
             return_value=chunks,
         ),
         "retrieve_v2": patch(
-            "src.rag.agent.nodes.hybrid_retrieve_v2",
+            "src.rag.agent.nodes.hybrid_retrieve_legal",
             new_callable=AsyncMock,
             return_value=MagicMock(chunks=chunks),
         ),
@@ -203,7 +203,7 @@ async def _run_agent(
 
 @pytest.mark.asyncio
 async def test_happy_path_returns_cited_answer_with_disclaimer():
-    result = await _run_agent("Vượt đèn đỏ bị phạt bao nhiêu tiền?")
+    result = await _run_agent("Xe máy vượt đèn đỏ bị phạt bao nhiêu tiền?")
 
     final = result.get("final_response")
     assert final
@@ -344,7 +344,7 @@ async def test_low_confidence_returns_insufficient_context():
 @pytest.mark.asyncio
 async def test_fabricated_dieu_is_removed_and_answer_is_blocked():
     result = await _run_agent(
-        "Mức phạt nấu cơm trên đường?",
+        "Mức phạt xe máy nấu cơm trên đường?",
         llm_response=_MOCK_LLM_HALLUCINATED,
     )
 
@@ -386,28 +386,28 @@ async def test_faithfulness_score_populated():
 async def test_assistant_identity_short_circuits_before_retrieval():
     result = await _run_agent("bạn là ai")
 
-    assert result.get("final_response") == ASSISTANT_IDENTITY_TEMPLATE
+    assert result.get("final_response") == f"{ASSISTANT_IDENTITY_TEMPLATE}\n\n{LEGAL_DISCLAIMER}"
     assert result.get("guardrail_reason") == "assistant_identity"
     assert result.get("is_out_of_scope") is False
-    assert result.get("disclaimer_appended") is False
+    assert result.get("disclaimer_appended") is True
 
 
 @pytest.mark.asyncio
 async def test_source_policy_short_circuits_before_retrieval():
     result = await _run_agent("bạn lấy dữ liệu từ đâu")
 
-    assert result.get("final_response") == SOURCE_POLICY_TEMPLATE
+    assert result.get("final_response") == f"{SOURCE_POLICY_TEMPLATE}\n\n{LEGAL_DISCLAIMER}"
     assert result.get("guardrail_reason") == "assistant_source_policy"
-    assert result.get("disclaimer_appended") is False
+    assert result.get("disclaimer_appended") is True
 
 
 @pytest.mark.asyncio
 async def test_how_to_use_short_circuits_before_retrieval():
     result = await _run_agent("nên hỏi bạn thế nào")
 
-    assert result.get("final_response") == HOW_TO_USE_TEMPLATE
+    assert result.get("final_response") == f"{HOW_TO_USE_TEMPLATE}\n\n{LEGAL_DISCLAIMER}"
     assert result.get("guardrail_reason") == "assistant_how_to_use"
-    assert result.get("disclaimer_appended") is False
+    assert result.get("disclaimer_appended") is True
 
 
 @pytest.mark.asyncio

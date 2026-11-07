@@ -79,7 +79,7 @@ class Settings(BaseSettings):
     S3_PUBLIC_BASE_URL: str = ""
     S3_PRESIGNED_URL_EXPIRE_SECONDS: int = 300
     KB_REQUIRE_OBJECT_STORAGE: bool = False
-    KB_LOCAL_STORAGE_PATH: str = "app/backend/storage/kb_v2"
+    KB_LOCAL_STORAGE_PATH: str = "app/backend/storage/legal_kb"
 
     # ---- RAG tuning ----
     # Retrieval
@@ -114,7 +114,7 @@ class Settings(BaseSettings):
 
     @property
     def kb_local_storage_path(self) -> str:
-        return self.KB_LOCAL_STORAGE_PATH or "app/backend/storage/kb_v2"
+        return self.KB_LOCAL_STORAGE_PATH or "app/backend/storage/legal_kb"
 
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":

@@ -610,7 +610,7 @@ async def test_chat_stream_rejects_invalid_bearer_token(client):
 
 @pytest.mark.asyncio
 async def test_admin_endpoint_requires_authentication(client):
-    response = await client.get("/api/v1/admin/kb-v2/revisions?page=1&page_size=1")
+    response = await client.get("/api/v1/admin/legal-kb/revisions?page=1&page_size=1")
     assert response.status_code == 401
 
 

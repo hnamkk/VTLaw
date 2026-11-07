@@ -1,11 +1,15 @@
-from pathlib import Path
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from scripts.e2e_ui_audit import detect_network_issues, detect_overlay_issues, detect_text_issues
+from scripts.e2e_ui_audit import (  # noqa: E402
+    detect_network_issues,
+    detect_overlay_issues,
+    detect_text_issues,
+)
 
 
 def test_detect_text_issues_flags_forbidden_and_mojibake():
@@ -35,5 +39,5 @@ def test_detect_network_issues_ignores_success_statuses():
 
 
 def test_detect_network_issues_flags_500():
-    issues = detect_network_issues([{"status": 500, "url": "http://127.0.0.1:8000/api/v1/admin/kb-v2/documents"}])
-    assert issues == ["network:500:http://127.0.0.1:8000/api/v1/admin/kb-v2/documents"]
+    issues = detect_network_issues([{"status": 500, "url": "http://127.0.0.1:8000/api/v1/admin/legal-kb/documents"}])
+    assert issues == ["network:500:http://127.0.0.1:8000/api/v1/admin/legal-kb/documents"]

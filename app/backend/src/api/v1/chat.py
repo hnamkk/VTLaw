@@ -462,7 +462,7 @@ async def chat_stream(
         "final_response": None,
         "is_out_of_scope": False,
         "injection_detected": False,
-        "kb_version": "kb_v2",
+        "knowledge_base": "legal_kb",
     }
 
     async def event_generator() -> AsyncGenerator[str, None]:
@@ -599,7 +599,11 @@ async def chat_stream(
                 except Exception:
                     await db_session.rollback()
                     logger.warning("Failed to mark quality observation %s", trace_id, exc_info=True)
-            error_payload = {"type": "error", "detail": str(e)}
+            error_payload = {
+                "type": "error",
+                "trace_id": trace_id,
+                "detail": "Xin lỗi, dịch vụ tra cứu đang gián đoạn. Bạn vui lòng thử lại sau; tôi chưa thể xác minh câu trả lời lúc này.",
+            }
             yield f"data: {json.dumps(error_payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(

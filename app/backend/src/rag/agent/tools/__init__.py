@@ -13,7 +13,7 @@ from datetime import date
 from typing_extensions import TypedDict
 
 from src.rag.embedding import embed_query
-from src.rag.retrieval.hybrid_v2 import hybrid_retrieve_v2
+from src.rag.retrieval.hybrid_legal import hybrid_retrieve_legal
 from src.rag.verification.replacement import find_replacement
 from src.schemas.rag import RetrievedChunk
 
@@ -33,7 +33,7 @@ async def legal_retriever(
     ranked candidates for the local legal-ranking stage.
     """
     query_embedding = await embed_query(query)
-    retrieval = await hybrid_retrieve_v2(
+    retrieval = await hybrid_retrieve_legal(
         db_session,
         query,
         query_embedding,

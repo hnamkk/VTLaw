@@ -1,6 +1,6 @@
 """Retrieval helpers exposed to the current KB runtime.
 
-The active runtime uses ``hybrid_v2`` directly. Legacy ``hybrid`` stays in its
+The active runtime uses ``hybrid_legal`` directly. Legacy ``hybrid`` stays in its
 own module for maintenance and targeted tests only.
 """
 

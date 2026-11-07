@@ -347,14 +347,15 @@ def _split_on_points(draft: ChunkDraft) -> list[ChunkDraft] | None:
         if not text:
             continue
         diem = ChunkDraft(
-            text_content=text,
+            # The clause lead-in carries shared amounts/conditions for each point.
+            text_content=f"{intro_text}\n{text}" if intro_text else text,
             chunk_type=CHUNK_TYPE_DIEM,
             chapter_num=draft.chapter_num,
             article_num=draft.article_num,
             clause_num=draft.clause_num,
             point_num=letter or None,
             display_path=f"{draft.display_path} → Điểm {letter}" if letter else draft.display_path,
-            heading_path=draft.heading_path,
+            heading_path=[*draft.heading_path, intro_text] if intro_text else draft.heading_path,
             source_page=draft.source_page,
             source_order=draft.source_order,
             content_kind=draft.content_kind,
